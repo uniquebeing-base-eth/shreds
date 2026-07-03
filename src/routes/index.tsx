@@ -3,13 +3,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Trophy, User, Users, Package, Gem, Wallet, Flame, Gift, Star,
   Sparkles, Lightbulb, X, ChevronLeft, ChevronRight, Award, Zap,
+  ArrowRight, Hand, Swords,
 } from "lucide-react";
 import starterAsset from "@/assets/pack-starter.png.asset.json";
 import mysteryAsset from "@/assets/pack-mystery.png.asset.json";
 import alphaAsset from "@/assets/pack-alpha.png.asset.json";
 import legendaryAsset from "@/assets/pack-legendary.png.asset.json";
 import explorerAsset from "@/assets/pack-explorer.png.asset.json";
-import logoAsset from "@/assets/shreds-logo.png.asset.json";
+import wordmarkAsset from "@/assets/shreds-wordmark.png.asset.json";
 
 export const Route = createFileRoute("/")({ component: HomeScreen });
 
@@ -23,31 +24,166 @@ const PACKS: Pack[] = [
   { id: "mystery", name: "Mystery Pack", image: mysteryAsset.url, accent: "oklch(0.68 0.22 300)", glow: "oklch(0.68 0.22 300 / 55%)", price: "1.00 USDM", owners: "58K+", shredded: "142K+", discoveries: "89+" },
   { id: "alpha", name: "Alpha Pack", image: alphaAsset.url, accent: "oklch(0.82 0.17 85)", glow: "oklch(0.82 0.17 85 / 55%)", price: "2.50 USDM", owners: "24K+", shredded: "71K+", discoveries: "54+" },
   { id: "legendary", name: "Legendary Pack", image: legendaryAsset.url, accent: "oklch(0.78 0.2 60)", glow: "oklch(0.78 0.2 60 / 55%)", price: "10.00 USDM", owners: "6.2K+", shredded: "18K+", discoveries: "32+" },
-  { id: "ultimate", name: "Ultimate Pack", image: explorerAsset.url, accent: "oklch(0.85 0.18 75)", glow: "oklch(0.85 0.18 75 / 55%)", price: "25.00 USDM", owners: "812", shredded: "2.1K", discoveries: "18+" },
+  { id: "explorer", name: "Explorer Pack", image: explorerAsset.url, accent: "oklch(0.85 0.18 75)", glow: "oklch(0.85 0.18 75 / 55%)", price: "25.00 USDM", owners: "812", shredded: "2.1K", discoveries: "18+" },
 ];
 
+/* -------------------- Facts (100) -------------------- */
+const FACTS: string[] = [
+  "MiniPay is built on the Celo blockchain.",
+  "MiniPay is integrated into the Opera Mini browser.",
+  "You can send stablecoins using MiniPay.",
+  "Celo was designed with mobile users in mind.",
+  "Celo aims to make digital payments accessible worldwide.",
+  "Wallet addresses on Celo can be mapped to phone numbers.",
+  "Celo supports multiple stable assets.",
+  "Transactions on Celo are generally fast.",
+  "Celo is open source.",
+  "Anyone can build apps on Celo.",
+  "USDT is available on Celo.",
+  "USDM is available on Celo.",
+  "Stablecoins are designed to maintain a stable value.",
+  "Stablecoins can help reduce exposure to price volatility.",
+  "Many people use stablecoins for payments.",
+  "Stablecoins can be transferred globally.",
+  "Digital dollars move much faster than many bank transfers.",
+  "Stablecoins can be used in decentralized applications.",
+  "Some merchants accept stablecoin payments.",
+  "Stablecoins make cross-border payments easier.",
+  "Keep your recovery phrase secure.",
+  "Never share your wallet recovery phrase.",
+  "Double-check wallet addresses before sending funds.",
+  "Update your app regularly.",
+  "Beware of fake giveaways.",
+  "Only connect to trusted apps.",
+  "Verify official community links.",
+  "Small transactions are a good way to test a new address.",
+  "Protect your device with a passcode.",
+  "Never send funds to someone promising guaranteed returns.",
+  "Thousands of developers are building on Celo.",
+  "Celo supports decentralized finance applications.",
+  "Celo supports NFT projects.",
+  "Games can be built on Celo.",
+  "Mini apps can integrate with MiniPay.",
+  "Celo supports smart contracts.",
+  "Developers can create custom tokens on Celo.",
+  "Communities around the world build on Celo.",
+  "Celo focuses on real-world utility.",
+  "New projects join the ecosystem regularly.",
+  "A blockchain is a shared digital ledger.",
+  "Transactions are recorded on-chain.",
+  "Wallets let you manage digital assets.",
+  "Every wallet has a unique address.",
+  "Digital assets stay in your wallet, not inside an app.",
+  "Smart contracts automate transactions.",
+  "Transactions are cryptographically verified.",
+  "Blockchains help reduce reliance on intermediaries.",
+  "Different blockchains have different strengths.",
+  "Blockchain powers more than cryptocurrencies.",
+  "Every Shred is a new discovery.",
+  "Collection cards can be rare.",
+  "Some discoveries are more valuable than others.",
+  "Completing collections unlocks achievements.",
+  "Rare discoveries appear less frequently.",
+  "Limited editions may only be available for a short time.",
+  "Every pack guarantees at least one discovery.",
+  "Legendary packs offer access to premium discoveries.",
+  "Mystery packs are designed for surprise.",
+  "Every collection tells a story.",
+  "Every Shred contributes to community statistics.",
+  "Leaderboards reward active participants.",
+  "XP increases your rank.",
+  "Collections showcase your journey.",
+  "Every discovery is permanently recorded in your profile.",
+  "Some achievements are hidden.",
+  "Daily activity helps grow your collection.",
+  "Community milestones unlock future events.",
+  "Every user starts with the same opportunity.",
+  "Discoveries are meant to be shared.",
+  "Every pack teaches something new.",
+  "Small facts are easier to remember.",
+  "Learning through play improves engagement.",
+  "Curiosity drives exploration.",
+  "Knowledge can be collected just like rewards.",
+  "Great communities grow through education.",
+  "Every discovery expands your understanding.",
+  "Questions lead to innovation.",
+  "Technology evolves every day.",
+  "The best builders never stop learning.",
+  "Your next pack could contain something legendary.",
+  "Not every rare card has been discovered yet.",
+  "Every swipe begins a new discovery.",
+  "Every collection starts with one card.",
+  "Legendary discoveries are designed to feel special.",
+  "Every pack has a story.",
+  "Great explorers are always curious.",
+  "The community grows with every new Shredder.",
+  "Discovery is part of the adventure.",
+  "Every reward starts with a single shred.",
+  "Shreds is built around discovery.",
+  "Every pack has multiple possible outcomes.",
+  "The pack is the heart of the experience.",
+  "Swipe to choose your pack.",
+  "Slash to reveal what's inside.",
+  "Your profile grows with every discovery.",
+  "Collection cards become part of your permanent album.",
+  "Every XP point moves you up the leaderboard.",
+  "New discoveries will continue to be added over time.",
+  "Your next shred could reveal something unforgettable.",
+];
+
+/* -------------------- Discoveries -------------------- */
 type Discovery = {
-  kind: "USDM" | "USDT" | "XP" | "TOKEN" | "CARD" | "FACT" | "DYK";
+  kind: "USDM" | "USDT" | "XP" | "CARD" | "FACT";
   title: string; sub: string; color: string; Icon: React.ComponentType<{ className?: string }>;
+  rarity?: "Common" | "Rare" | "Epic" | "Legendary";
 };
 
-const DISCOVERY_POOL: Discovery[] = [
-  { kind: "USDM", title: "2.50 USDM", sub: "Stablecoin", color: "oklch(0.7 0.2 145)", Icon: Wallet },
-  { kind: "USDT", title: "1.00 USDT", sub: "USDT on Celo", color: "oklch(0.7 0.18 165)", Icon: Wallet },
-  { kind: "XP", title: "150 XP", sub: "Experience", color: "oklch(0.68 0.22 250)", Icon: Star },
-  { kind: "TOKEN", title: "1 Shred Token", sub: "Token", color: "oklch(0.82 0.17 85)", Icon: Gem },
-  { kind: "CARD", title: "Neon Cube", sub: "Rare Collectible", color: "oklch(0.68 0.22 300)", Icon: Award },
-  { kind: "DYK", title: "Did You Know?", sub: "Celo runs on carbon-negative infra", color: "oklch(0.68 0.22 300)", Icon: Lightbulb },
-  { kind: "FACT", title: "MiniPay Fact", sub: "MiniPay serves 7M+ users worldwide", color: "oklch(0.7 0.2 145)", Icon: Sparkles },
-  { kind: "FACT", title: "Celo Fact", sub: "Blocks finalize in ~1 second", color: "oklch(0.7 0.2 200)", Icon: Sparkles },
+const STABLES: Discovery[] = [
+  { kind: "USDM", title: "0.50 USDM", sub: "Stablecoin on Celo", color: "oklch(0.75 0.2 145)", Icon: Wallet, rarity: "Common" },
+  { kind: "USDM", title: "1.00 USDM", sub: "Stablecoin on Celo", color: "oklch(0.75 0.2 145)", Icon: Wallet, rarity: "Common" },
+  { kind: "USDM", title: "2.50 USDM", sub: "Stablecoin on Celo", color: "oklch(0.75 0.2 145)", Icon: Wallet, rarity: "Rare" },
+  { kind: "USDT", title: "1.00 USDT", sub: "USDT on Celo", color: "oklch(0.72 0.16 165)", Icon: Wallet, rarity: "Common" },
+  { kind: "USDT", title: "5.00 USDT", sub: "USDT on Celo", color: "oklch(0.72 0.16 165)", Icon: Wallet, rarity: "Epic" },
 ];
+const XPS: Discovery[] = [
+  { kind: "XP", title: "50 XP", sub: "Experience Points", color: "oklch(0.7 0.2 250)", Icon: Star, rarity: "Common" },
+  { kind: "XP", title: "150 XP", sub: "Experience Points", color: "oklch(0.7 0.2 250)", Icon: Star, rarity: "Rare" },
+  { kind: "XP", title: "500 XP", sub: "Experience Points", color: "oklch(0.7 0.2 250)", Icon: Star, rarity: "Epic" },
+];
+const CARDS: Discovery[] = [
+  { kind: "CARD", title: "Neon Cube", sub: "Collection Card", color: "oklch(0.7 0.22 300)", Icon: Award, rarity: "Rare" },
+  { kind: "CARD", title: "Celo Compass", sub: "Collection Card", color: "oklch(0.75 0.2 145)", Icon: Award, rarity: "Rare" },
+  { kind: "CARD", title: "MiniPay Sigil", sub: "Collection Card", color: "oklch(0.78 0.2 85)", Icon: Award, rarity: "Epic" },
+  { kind: "CARD", title: "Golden Shard", sub: "Collection Card", color: "oklch(0.82 0.17 85)", Icon: Award, rarity: "Legendary" },
+];
+
+function pickRandom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function buildDiscoveries(): Discovery[] {
+  // Guarantee: at least 1 stable, 1 fact. Optionally XP or a card.
+  const items: Discovery[] = [];
+  items.push(pickRandom(STABLES));
+  if (Math.random() > 0.4) items.push(pickRandom(XPS));
+  if (Math.random() > 0.55) items.push(pickRandom(CARDS));
+  // Always include a fact discovery
+  const fact = FACTS[Math.floor(Math.random() * FACTS.length)];
+  items.push({
+    kind: "FACT",
+    title: "Did You Know?",
+    sub: fact,
+    color: "oklch(0.7 0.22 300)",
+    Icon: Lightbulb,
+    rarity: "Common",
+  });
+  return items;
+}
 
 const LIVE_EVENTS = [
   { user: "Ada", text: "discovered", accent: "2.50 USDM", from: "Mystery Pack" },
-  { user: "David", text: "unlocked", accent: "a Rare Collection Card", from: "Alpha Pack" },
+  { user: "David", text: "unlocked", accent: "a Rare Card", from: "Alpha Pack" },
   { user: "Sarah", text: "found", accent: "a MiniPay Fact", from: "Starter Pack" },
   { user: "Michael", text: "completed", accent: "a Collection", from: "Legendary Pack" },
-  { user: "Lin", text: "discovered", accent: "5.00 USDT", from: "Ultimate Pack" },
+  { user: "Lin", text: "discovered", accent: "5.00 USDT", from: "Explorer Pack" },
   { user: "Kwame", text: "unlocked", accent: "a Legendary Card", from: "Legendary Pack" },
 ];
 
@@ -60,34 +196,31 @@ const AVATAR_GRADIENTS = [
   "linear-gradient(135deg,#34d399,#0d9488)",
 ];
 
+/* -------------------- Wallet (MiniPay) -------------------- */
 function useMiniPayWallet() {
   const [address, setAddress] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "connecting" | "connected" | "unavailable">("idle");
+  const [isMiniPay, setIsMiniPay] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function connect() {
-      setStatus("connecting");
-      try {
-        const eth = (typeof window !== "undefined" ? (window as any).ethereum : null);
-        if (!eth) { if (!cancelled) setStatus("unavailable"); return; }
-        // MiniPay auto-connects — accounts are immediately available.
-        if (eth.isMiniPay) {
-          const accounts: string[] = await eth.request({ method: "eth_accounts" });
-          if (!cancelled && accounts?.[0]) { setAddress(accounts[0]); setStatus("connected"); return; }
-        }
-        // Fallback: any injected wallet
-        const accounts: string[] = await eth.request({ method: "eth_requestAccounts" });
-        if (!cancelled && accounts?.[0]) { setAddress(accounts[0]); setStatus("connected"); }
-      } catch {
-        if (!cancelled) setStatus("unavailable");
+  const connect = useCallback(async () => {
+    setStatus("connecting");
+    try {
+      const eth = (typeof window !== "undefined" ? (window as any).ethereum : null);
+      if (!eth) { setStatus("unavailable"); return; }
+      if (eth.isMiniPay) {
+        setIsMiniPay(true);
+        const accounts: string[] = await eth.request({ method: "eth_accounts" });
+        if (accounts?.[0]) { setAddress(accounts[0]); setStatus("connected"); return; }
       }
-    }
-    connect();
-    return () => { cancelled = true; };
+      const accounts: string[] = await eth.request({ method: "eth_requestAccounts" });
+      if (accounts?.[0]) { setAddress(accounts[0]); setStatus("connected"); }
+      else setStatus("unavailable");
+    } catch { setStatus("unavailable"); }
   }, []);
 
-  return { address, status };
+  useEffect(() => { connect(); }, [connect]);
+
+  return { address, status, isMiniPay, connect };
 }
 
 function shortAddr(a: string | null) {
@@ -95,7 +228,7 @@ function shortAddr(a: string | null) {
   return a.slice(0, 6) + "…" + a.slice(-4);
 }
 
-/* ----------------- Home Screen ----------------- */
+/* -------------------- Home Screen -------------------- */
 
 function HomeScreen() {
   const [index, setIndex] = useState(0);
@@ -105,11 +238,21 @@ function HomeScreen() {
   const [tickerIdx, setTickerIdx] = useState(0);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const wallet = useMiniPayWallet();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!localStorage.getItem("shreds_onboarded")) setShowOnboarding(true);
+  }, []);
+
+  const finishOnboarding = () => {
+    try { localStorage.setItem("shreds_onboarded", "1"); } catch {}
+    setShowOnboarding(false);
+  };
 
   const pack = PACKS[index];
 
-  // ticker rotation
   useEffect(() => {
     const t = setInterval(() => setTickerIdx((i) => (i + 1) % LIVE_EVENTS.length), 3500);
     return () => clearInterval(t);
@@ -120,43 +263,43 @@ function HomeScreen() {
 
   const runShred = useCallback(() => {
     if (phase !== "idle") return;
-    // pick 2-4 discoveries
-    const n = 2 + Math.floor(Math.random() * 3);
-    const items: Discovery[] = [];
-    const pool = [...DISCOVERY_POOL];
-    for (let i = 0; i < n; i++) {
-      items.push(pool[Math.floor(Math.random() * pool.length)]);
-    }
+    const items = buildDiscoveries();
     setReveals(items);
     setPhase("slashing");
-    setTimeout(() => setPhase("opening"), 550);
+    // Slash claw visible for 700ms
+    setTimeout(() => setPhase("opening"), 700);
+    // Pack tears for 800ms
     setTimeout(() => {
       setPhase("revealing");
-      setCollection((c) => [...items.filter(i => i.kind === "CARD" || i.kind === "DYK" || i.kind === "FACT"), ...c].slice(0, 40));
-    }, 1350);
+      setCollection((c) => [...items, ...c].slice(0, 60));
+    }, 1550);
   }, [phase]);
 
   const closeReveal = () => { setPhase("idle"); setReveals([]); };
 
   return (
-    <div className="min-h-dvh w-full text-foreground pb-20">
-      <div className="mx-auto w-full max-w-md px-4 pt-6">
+    <div className="min-h-dvh w-full text-foreground pb-24">
+      <div className="mx-auto w-full max-w-md px-3 pt-4">
         {/* Header */}
-        <header className="grid grid-cols-[64px_1fr_64px] items-center gap-2">
+        <header className="grid grid-cols-[52px_1fr_52px] items-center gap-2">
           <button
             onClick={() => setShowLeaderboard(true)}
             className="flex flex-col items-center gap-1 group"
             aria-label="Leaderboard"
           >
-            <div className="icon-tile w-14 h-14 rounded-2xl flex items-center justify-center group-active:scale-95 transition">
-              <Trophy className="w-7 h-7 text-[color:var(--gold)]" />
+            <div className="icon-tile w-12 h-12 rounded-2xl flex items-center justify-center group-active:scale-95 transition">
+              <Trophy className="w-6 h-6 text-[color:var(--gold)]" />
             </div>
-            <span className="text-[10px] font-semibold tracking-widest text-muted-foreground">LEADERBOARD</span>
+            <span className="text-[9px] font-semibold tracking-widest text-muted-foreground">LEADER</span>
           </button>
 
-          <div className="flex flex-col items-center">
-            <img src={logoAsset.url} alt="Shreds" className="h-14 w-auto object-contain drop-shadow-[0_0_25px_oklch(0.88_0.28_135/0.45)]" />
-            <div className="mt-1 text-[10px] font-bold tracking-[0.28em]">
+          <div className="flex flex-col items-center min-w-0">
+            <img
+              src={wordmarkAsset.url}
+              alt="Shreds"
+              className="h-16 w-auto max-w-full object-contain drop-shadow-[0_0_25px_oklch(0.88_0.28_135/0.45)]"
+            />
+            <div className="mt-0.5 text-[10px] font-bold tracking-[0.22em] whitespace-nowrap">
               <span className="text-foreground">DISCOVER. </span>
               <span className="text-shred">COLLECT. </span>
               <span className="text-[color:var(--gold)]">EARN.</span>
@@ -168,21 +311,21 @@ function HomeScreen() {
             className="flex flex-col items-center gap-1 group"
             aria-label="Profile"
           >
-            <div className="icon-tile w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden group-active:scale-95 transition">
+            <div className="icon-tile w-12 h-12 rounded-2xl flex items-center justify-center overflow-hidden group-active:scale-95 transition">
               <div className="w-full h-full flex items-center justify-center" style={{ background: AVATAR_GRADIENTS[0] }}>
-                <User className="w-7 h-7 text-white" />
+                <User className="w-6 h-6 text-white" />
               </div>
             </div>
-            <span className="text-[10px] font-semibold tracking-widest text-muted-foreground">PROFILE</span>
+            <span className="text-[9px] font-semibold tracking-widest text-muted-foreground">PROFILE</span>
           </button>
         </header>
 
-        {/* Stats row */}
-        <div className="stat-card mt-5 rounded-2xl px-3 py-3 grid grid-cols-4 gap-2">
+        {/* Stats row - 2x2 on mobile */}
+        <div className="mt-4 grid grid-cols-2 gap-2">
           <Stat icon={<Users className="w-4 h-4 text-shred" />} value="184K+" label="SHREDDERS" />
           <Stat icon={<Package className="w-4 h-4 text-[color:oklch(0.7_0.18_240)]" />} value="2.8M+" label="PACKS SHREDDED" />
           <Stat icon={<Gem className="w-4 h-4 text-[color:var(--royal)]" />} value="945K+" label="DISCOVERIES" />
-          <Stat icon={<Wallet className="w-4 h-4 text-[color:var(--gold)]" />} value="$126K+" label="REWARDS" />
+          <Stat icon={<Wallet className="w-4 h-4 text-[color:var(--gold)]" />} value="$126K+" label="REWARDS CLAIMED" />
         </div>
 
         {/* Pack carousel */}
@@ -194,8 +337,8 @@ function HomeScreen() {
           phase={phase}
         />
 
-        {/* Pack details */}
-        <div className="mt-5 grid grid-cols-4 gap-2">
+        {/* Pack details - 2x2 on mobile */}
+        <div className="mt-4 grid grid-cols-2 gap-2">
           <MiniStat Icon={Star} value={pack.price} label="PRICE" tint="oklch(0.88 0.28 135)" />
           <MiniStat Icon={Users} value={pack.owners} label="OWNERS" tint="oklch(0.7 0.2 145)" />
           <MiniStat Icon={Flame} value={pack.shredded} label="SHREDDED" tint="oklch(0.75 0.2 45)" />
@@ -222,59 +365,66 @@ function HomeScreen() {
         {/* Hint */}
         <div className="mt-4 text-center">
           <div className="font-display text-2xl text-shred text-glow-shred">SLASH ACROSS TO SHRED</div>
-          <div className="text-xs tracking-[0.25em] font-semibold text-muted-foreground mt-1">
+          <div className="text-[10px] tracking-[0.25em] font-semibold text-muted-foreground mt-1">
             REVEAL YOUR DISCOVERIES
           </div>
         </div>
 
         {/* Wallet chip */}
-        <div className="mt-4 flex justify-center">
-          <div className="stat-card rounded-full px-3 py-1.5 text-[11px] font-semibold flex items-center gap-2">
+        <div className="mt-3 flex justify-center">
+          <button
+            onClick={wallet.status === "connected" ? undefined : wallet.connect}
+            className="stat-card rounded-full px-3 py-1.5 text-[11px] font-semibold flex items-center gap-2 active:scale-95 transition"
+          >
             <span className={`w-1.5 h-1.5 rounded-full ${wallet.status === "connected" ? "bg-shred" : "bg-muted-foreground"} animate-pulse`} />
-            {wallet.status === "connected" && <>MiniPay · {shortAddr(wallet.address)}</>}
-            {wallet.status === "connecting" && <>Connecting MiniPay…</>}
-            {wallet.status === "unavailable" && <>Open in MiniPay to auto-connect</>}
-            {wallet.status === "idle" && <>Initializing wallet…</>}
-          </div>
+            {wallet.status === "connected" && <>{wallet.isMiniPay ? "MiniPay" : "Wallet"} · {shortAddr(wallet.address)}</>}
+            {wallet.status === "connecting" && <>Connecting…</>}
+            {wallet.status === "unavailable" && <>Tap to connect wallet</>}
+            {wallet.status === "idle" && <>Initializing…</>}
+          </button>
         </div>
       </div>
 
-      {/* Live activity */}
       <LiveTicker event={LIVE_EVENTS[tickerIdx]} idx={tickerIdx} />
 
-      {/* Reveal overlay */}
       {phase !== "idle" && (
         <RevealOverlay phase={phase} reveals={reveals} pack={pack} onClose={closeReveal} />
       )}
 
       {showLeaderboard && <LeaderboardSheet onClose={() => setShowLeaderboard(false)} />}
       {showProfile && <ProfileSheet onClose={() => setShowProfile(false)} wallet={wallet.address} collection={collection} />}
+      {showOnboarding && <OnboardingOverlay onDone={finishOnboarding} />}
     </div>
   );
 }
 
-/* ----------------- Small pieces ----------------- */
+/* -------------------- Small pieces -------------------- */
 
 function Stat({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
   return (
-    <div className="flex flex-col items-center text-center">
-      <div className="flex items-center gap-1">{icon}<span className="font-bold text-sm">{value}</span></div>
-      <div className="text-[9px] font-bold tracking-widest text-muted-foreground mt-0.5 leading-tight">{label}</div>
+    <div className="stat-card rounded-xl px-3 py-2.5 flex items-center gap-2 min-w-0">
+      <div className="shrink-0">{icon}</div>
+      <div className="min-w-0">
+        <div className="font-bold text-sm leading-none truncate">{value}</div>
+        <div className="text-[9px] font-bold tracking-widest text-muted-foreground mt-1 leading-tight truncate">{label}</div>
+      </div>
     </div>
   );
 }
 
 function MiniStat({ Icon, value, label, tint }: { Icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; value: string; label: string; tint: string }) {
   return (
-    <div className="flex flex-col items-center text-center">
-      <Icon className="w-5 h-5 mb-1" style={{ color: tint }} />
-      <div className="font-bold text-sm leading-none">{value}</div>
-      <div className="text-[9px] font-bold tracking-widest text-muted-foreground mt-1">{label}</div>
+    <div className="stat-card rounded-xl px-3 py-2.5 flex items-center gap-2 min-w-0">
+      <Icon className="w-5 h-5 shrink-0" style={{ color: tint }} />
+      <div className="min-w-0">
+        <div className="font-bold text-sm leading-none truncate">{value}</div>
+        <div className="text-[9px] font-bold tracking-widest text-muted-foreground mt-1 truncate">{label}</div>
+      </div>
     </div>
   );
 }
 
-/* ----------------- Pack Carousel ----------------- */
+/* -------------------- Pack Carousel -------------------- */
 
 function PackCarousel({
   index, onPrev, onNext, onShred, phase,
@@ -294,43 +444,42 @@ function PackCarousel({
   }
   function onPointerUp(e: React.PointerEvent) {
     if (!start.current) return;
-    const dx = e.clientX - start.current.x;
-    const dy = e.clientY - start.current.y;
-    const dt = Date.now() - start.current.t;
+    const s = start.current;
+    const dx = e.clientX - s.x;
+    const dy = e.clientY - s.y;
+    const dt = Date.now() - s.t;
     const absX = Math.abs(dx), absY = Math.abs(dy);
     start.current = null;
     if (phase !== "idle") return;
-    // slash: fast diagonal / horizontal-ish long swipe
     const dist = Math.hypot(dx, dy);
+    // slash: fast diagonal / long swipe with some vertical component
     if (dist > 90 && dt < 700 && absY > 20 && absX > 40 && absX / absY < 4) {
-      // record slash line relative to container
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
-        const sx = start.current ? 0 : (e.clientX - dx) - rect.left;
-        setSlash({ x1: (e.clientX - dx) - rect.left, y1: (e.clientY - dy) - rect.top, x2: e.clientX - rect.left, y2: e.clientY - rect.top });
-        void sx;
+        setSlash({
+          x1: s.x - rect.left,
+          y1: s.y - rect.top,
+          x2: e.clientX - rect.left,
+          y2: e.clientY - rect.top,
+        });
       }
       onShred();
-      setTimeout(() => setSlash(null), 900);
+      setTimeout(() => setSlash(null), 1000);
       return;
     }
-    // swipe navigation
     if (absX > absY && absX > 50) { dx < 0 ? onNext() : onPrev(); }
   }
 
   return (
     <div
       ref={containerRef}
-      className="relative mt-4 h-[440px] select-none touch-none"
+      className="relative mt-4 h-[52vh] min-h-[380px] max-h-[520px] select-none touch-none"
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
     >
-      {/* prev peek */}
-      <PackImage pack={prev} className="absolute left-[-40%] top-1/2 -translate-y-1/2 h-[70%] opacity-50 blur-[1px]" />
-      {/* next peek */}
-      <PackImage pack={next} className="absolute right-[-40%] top-1/2 -translate-y-1/2 h-[70%] opacity-50 blur-[1px]" />
+      <PackImage pack={prev} className="absolute left-[-38%] top-1/2 -translate-y-1/2 h-[62%] opacity-40 blur-[1px]" />
+      <PackImage pack={next} className="absolute right-[-38%] top-1/2 -translate-y-1/2 h-[62%] opacity-40 blur-[1px]" />
 
-      {/* current */}
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="relative h-full w-full flex items-center justify-center float-y">
           <div
@@ -339,12 +488,11 @@ function PackCarousel({
           />
           <PackImage
             pack={pack}
-            className={`relative h-full max-h-[440px] w-auto drop-shadow-[0_20px_40px_rgba(0,0,0,0.6)] ${phase === "opening" || phase === "revealing" ? "pack-tearing" : ""}`}
+            className={`relative h-full w-auto drop-shadow-[0_20px_40px_rgba(0,0,0,0.6)] ${phase === "opening" || phase === "revealing" ? "pack-tearing" : ""}`}
           />
-          {/* claw slash svg */}
           {slash && (
             <svg className="claw absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 ${containerRef.current?.clientWidth ?? 300} ${containerRef.current?.clientHeight ?? 440}`}>
-              {[-14, 0, 14].map((off, i) => {
+              {[-16, 0, 16].map((off, i) => {
                 const nx = -(slash.y2 - slash.y1);
                 const ny = slash.x2 - slash.x1;
                 const len = Math.hypot(nx, ny) || 1;
@@ -354,7 +502,7 @@ function PackCarousel({
                     key={i}
                     d={`M ${slash.x1 + ox} ${slash.y1 + oy} L ${slash.x2 + ox} ${slash.y2 + oy}`}
                     stroke="oklch(0.92 0.3 130)"
-                    strokeWidth={i === 1 ? 6 : 4}
+                    strokeWidth={i === 1 ? 7 : 5}
                     strokeLinecap="round"
                     fill="none"
                   />
@@ -365,18 +513,17 @@ function PackCarousel({
         </div>
       </div>
 
-      {/* Arrows */}
       <button
         onClick={onPrev}
         aria-label="Previous pack"
-        className="absolute left-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full stat-card flex items-center justify-center active:scale-95"
+        className="absolute left-0 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full stat-card flex items-center justify-center active:scale-95"
       >
         <ChevronLeft className="w-5 h-5 text-shred" />
       </button>
       <button
         onClick={onNext}
         aria-label="Next pack"
-        className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full stat-card flex items-center justify-center active:scale-95"
+        className="absolute right-0 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full stat-card flex items-center justify-center active:scale-95"
       >
         <ChevronRight className="w-5 h-5 text-shred" />
       </button>
@@ -388,53 +535,76 @@ function PackImage({ pack, className }: { pack: Pack; className?: string }) {
   return <img src={pack.image} alt={pack.name} draggable={false} className={className} />;
 }
 
-/* ----------------- Reveal Overlay ----------------- */
+/* -------------------- Reveal Overlay -------------------- */
+
+const RARITY_COLOR: Record<string, string> = {
+  Common: "oklch(0.7 0.05 150)",
+  Rare: "oklch(0.7 0.2 250)",
+  Epic: "oklch(0.7 0.22 300)",
+  Legendary: "oklch(0.82 0.17 85)",
+};
 
 function RevealOverlay({ phase, reveals, pack, onClose }: {
   phase: "slashing" | "opening" | "revealing" | "idle"; reveals: Discovery[]; pack: Pack; onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-40 bg-background/80 backdrop-blur-md flex flex-col items-center justify-center px-6">
+    <div className="fixed inset-0 z-40 bg-background/85 backdrop-blur-md flex flex-col items-center justify-center px-4 overflow-y-auto py-8">
       {phase === "slashing" && (
-        <div className="font-display text-4xl text-shred text-glow-shred animate-pulse">SHREDDING…</div>
+        <div className="font-display text-4xl text-shred text-glow-shred animate-pulse">SLASHING…</div>
       )}
       {phase === "opening" && (
         <div className="font-display text-4xl text-shred text-glow-shred">TEARING OPEN…</div>
       )}
       {phase === "revealing" && (
         <div className="w-full max-w-md">
-          <div className="text-center mb-6">
-            <div className="text-xs tracking-[0.3em] font-bold text-muted-foreground">FROM {pack.name.toUpperCase()}</div>
-            <div className="font-display text-4xl text-shred text-glow-shred mt-1">YOUR DISCOVERIES</div>
+          <div className="text-center mb-5">
+            <div className="text-[10px] tracking-[0.3em] font-bold text-muted-foreground">FROM {pack.name.toUpperCase()}</div>
+            <div className="font-display text-3xl text-shred text-glow-shred mt-1">YOUR DISCOVERIES</div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             {reveals.map((d, i) => (
               <div
                 key={i}
-                className="reveal-pop rounded-2xl p-4 flex flex-col items-center text-center relative overflow-hidden"
+                className="reveal-pop rounded-2xl p-4 flex items-center gap-3 relative overflow-hidden"
                 style={{
-                  animationDelay: `${i * 180}ms`,
-                  background: `linear-gradient(180deg, oklch(0.22 0.04 150 / 90%), oklch(0.14 0.02 150 / 95%))`,
+                  animationDelay: `${i * 160}ms`,
+                  background: `linear-gradient(135deg, oklch(0.22 0.04 150 / 90%), oklch(0.14 0.02 150 / 95%))`,
                   border: `1px solid ${d.color}`,
-                  boxShadow: `0 0 30px ${d.color.replace(")", " / 35%)")}`,
+                  boxShadow: `0 0 24px ${d.color.replace(")", " / 30%)")}`,
                 }}
               >
                 <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center mb-2"
-                  style={{ background: `radial-gradient(circle, ${d.color.replace(")", " / 60%)")}, transparent)` }}
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
+                  style={{
+                    background: `radial-gradient(circle, ${d.color.replace(")", " / 55%)")}, transparent 70%)`,
+                    border: `1px solid ${d.color.replace(")", " / 50%)")}`,
+                  }}
                 >
                   <d.Icon className="w-7 h-7" />
                 </div>
-                <div className="font-bold text-lg leading-tight">{d.title}</div>
-                <div className="text-[10px] tracking-widest font-semibold text-muted-foreground mt-1 uppercase">{d.sub}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="font-bold text-base leading-tight">{d.title}</div>
+                    {d.rarity && (
+                      <span
+                        className="text-[9px] font-bold tracking-widest px-1.5 py-0.5 rounded"
+                        style={{
+                          color: RARITY_COLOR[d.rarity],
+                          border: `1px solid ${RARITY_COLOR[d.rarity]}`,
+                        }}
+                      >{d.rarity.toUpperCase()}</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1 leading-snug">{d.sub}</div>
+                </div>
               </div>
             ))}
           </div>
           <button
             onClick={onClose}
-            className="mt-8 w-full py-3 rounded-2xl font-bold tracking-wider bg-shred text-primary-foreground active:scale-[0.98] glow-shred"
+            className="mt-6 w-full py-3 rounded-2xl font-bold tracking-wider bg-shred text-primary-foreground active:scale-[0.98] glow-shred"
           >
-            COLLECT & CONTINUE
+            COLLECT &amp; CONTINUE
           </button>
         </div>
       )}
@@ -442,34 +612,31 @@ function RevealOverlay({ phase, reveals, pack, onClose }: {
   );
 }
 
-/* ----------------- Live Ticker ----------------- */
+/* -------------------- Live Ticker -------------------- */
 
 function LiveTicker({ event, idx }: { event: typeof LIVE_EVENTS[number]; idx: number }) {
   return (
     <div className="fixed bottom-3 inset-x-0 flex justify-center px-3 z-30 pointer-events-none">
       <div key={idx} className="ticker-in stat-card rounded-2xl px-3 py-2 flex items-center gap-2 w-full max-w-md pointer-events-auto">
-        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-shred/15 text-shred text-[10px] font-bold tracking-wider">
+        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-shred/15 text-shred text-[10px] font-bold tracking-wider shrink-0">
           <span className="w-1.5 h-1.5 rounded-full bg-shred animate-pulse" /> LIVE
         </div>
         <div
-          className="w-7 h-7 rounded-full shrink-0"
+          className="w-6 h-6 rounded-full shrink-0"
           style={{ background: AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length] }}
         />
-        <div className="text-xs flex-1 truncate">
+        <div className="text-[11px] flex-1 truncate min-w-0">
           <span className="font-bold">{event.user}</span>{" "}
           <span className="text-muted-foreground">{event.text}</span>{" "}
-          <span className="font-bold text-shred">{event.accent}</span>{" "}
-          <span className="text-muted-foreground">from a</span>{" "}
-          <span className="font-bold text-[color:var(--royal)]">{event.from}</span>
+          <span className="font-bold text-shred">{event.accent}</span>
         </div>
-        <span className="text-[10px] text-muted-foreground">now</span>
-        <Zap className="w-4 h-4 text-shred" />
+        <Zap className="w-4 h-4 text-shred shrink-0" />
       </div>
     </div>
   );
 }
 
-/* ----------------- Leaderboard ----------------- */
+/* -------------------- Leaderboard -------------------- */
 
 const LB_USERS = [
   "Ada", "David", "Sarah", "Michael", "Lin", "Kwame", "Nia", "Jorge", "Priya", "Mateo",
@@ -487,24 +654,24 @@ function LeaderboardSheet({ onClose }: { onClose: () => void }) {
 
   return (
     <Sheet title="Leaderboard" onClose={onClose} Icon={Trophy}>
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-1.5 mb-4">
         {tabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold tracking-wider transition ${tab === t ? "bg-shred text-primary-foreground glow-shred" : "stat-card text-muted-foreground"}`}
+            className={`flex-1 py-2 rounded-xl text-[10px] font-bold tracking-wider transition ${tab === t ? "bg-shred text-primary-foreground glow-shred" : "stat-card text-muted-foreground"}`}
           >{t.toUpperCase()}</button>
         ))}
       </div>
       <div className="space-y-2">
         {rows.map((r, i) => (
           <div key={r.user} className="stat-card rounded-xl px-3 py-3 flex items-center gap-3">
-            <div className="w-8 text-center font-display text-xl" style={{ color: i === 0 ? "var(--gold)" : i === 1 ? "oklch(0.8 0.02 150)" : i === 2 ? "oklch(0.68 0.15 40)" : "var(--muted-foreground)" }}>
+            <div className="w-8 text-center font-display text-xl shrink-0" style={{ color: i === 0 ? "var(--gold)" : i === 1 ? "oklch(0.8 0.02 150)" : i === 2 ? "oklch(0.68 0.15 40)" : "var(--muted-foreground)" }}>
               #{i + 1}
             </div>
-            <div className="w-9 h-9 rounded-full" style={{ background: AVATAR_GRADIENTS[i % AVATAR_GRADIENTS.length] }} />
-            <div className="flex-1 font-bold">{r.user}</div>
-            <div className="text-shred font-bold">{r.xp} <span className="text-[10px] tracking-widest text-muted-foreground">XP</span></div>
+            <div className="w-9 h-9 rounded-full shrink-0" style={{ background: AVATAR_GRADIENTS[i % AVATAR_GRADIENTS.length] }} />
+            <div className="flex-1 font-bold truncate min-w-0">{r.user}</div>
+            <div className="text-shred font-bold text-sm shrink-0">{r.xp} <span className="text-[10px] tracking-widest text-muted-foreground">XP</span></div>
           </div>
         ))}
       </div>
@@ -512,22 +679,24 @@ function LeaderboardSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-/* ----------------- Profile ----------------- */
+/* -------------------- Profile -------------------- */
 
 function ProfileSheet({ onClose, wallet, collection }: { onClose: () => void; wallet: string | null; collection: Discovery[] }) {
-  const cards = collection.filter(c => c.kind === "CARD").length;
-  const dyk = collection.filter(c => c.kind === "DYK").length;
-  const facts = collection.filter(c => c.kind === "FACT").length;
+  const cards = collection.filter(c => c.kind === "CARD");
+  const facts = collection.filter(c => c.kind === "FACT");
+  const stables = collection.filter(c => c.kind === "USDM" || c.kind === "USDT");
+  const [tab, setTab] = useState<"CARDS" | "FACTS" | "REWARDS">("CARDS");
+
   return (
     <Sheet title="Profile" onClose={onClose} Icon={User}>
-      <div className="stat-card rounded-2xl p-4 flex items-center gap-4">
-        <div className="w-16 h-16 rounded-2xl" style={{ background: AVATAR_GRADIENTS[0] }} />
-        <div className="flex-1">
-          <div className="font-display text-2xl">SHREDDER_01</div>
-          <div className="text-xs text-muted-foreground truncate">{wallet ? shortAddr(wallet) : "Wallet not connected"}</div>
+      <div className="stat-card rounded-2xl p-4 flex items-center gap-3">
+        <div className="w-14 h-14 rounded-2xl shrink-0" style={{ background: AVATAR_GRADIENTS[0] }} />
+        <div className="flex-1 min-w-0">
+          <div className="font-display text-xl truncate">SHREDDER_01</div>
+          <div className="text-[11px] text-muted-foreground truncate">{wallet ? shortAddr(wallet) : "Wallet not connected"}</div>
           <div className="mt-2 flex items-center gap-2">
             <div className="px-2 py-0.5 rounded-full bg-shred/15 text-shred text-[10px] font-bold tracking-wider">LVL 7</div>
-            <div className="text-xs text-muted-foreground">1,250 / 2,000 XP</div>
+            <div className="text-[11px] text-muted-foreground">1,250 / 2,000 XP</div>
           </div>
           <div className="mt-1.5 h-1.5 w-full rounded-full bg-secondary overflow-hidden">
             <div className="h-full bg-shred glow-shred" style={{ width: "62%" }} />
@@ -536,33 +705,78 @@ function ProfileSheet({ onClose, wallet, collection }: { onClose: () => void; wa
       </div>
 
       <div className="grid grid-cols-3 gap-2 mt-4">
-        <ProfileStat label="PACKS" value="42" />
-        <ProfileStat label="REWARDS" value="$18.40" />
-        <ProfileStat label="XP" value="1,250" />
-        <ProfileStat label="CARDS" value={String(cards)} />
-        <ProfileStat label="DID YOU KNOW" value={String(dyk)} />
-        <ProfileStat label="SHRED FACTS" value={String(facts)} />
+        <ProfileStat label="PACKS" value={String(collection.length ? Math.ceil(collection.length / 3) : 0)} />
+        <ProfileStat label="CARDS" value={String(cards.length)} />
+        <ProfileStat label="FACTS" value={String(facts.length)} />
       </div>
 
-      <div className="mt-6">
-        <div className="text-xs tracking-[0.25em] font-bold text-muted-foreground mb-2">ACHIEVEMENTS</div>
-        <div className="grid grid-cols-4 gap-2">
-          {["First Shred", "10 Packs", "Rare Find", "Streak x3"].map((a, i) => (
-            <div key={a} className="stat-card rounded-xl p-2 flex flex-col items-center text-center">
-              <Award className="w-6 h-6 text-[color:var(--gold)]" />
-              <div className="text-[10px] font-bold mt-1 leading-tight">{a}</div>
-              {i > 1 && <div className="text-[9px] text-muted-foreground">locked</div>}
-            </div>
-          ))}
-        </div>
+      <div className="flex gap-1.5 mt-5 mb-3">
+        {(["CARDS", "FACTS", "REWARDS"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`flex-1 py-2 rounded-xl text-[10px] font-bold tracking-wider transition ${tab === t ? "bg-shred text-primary-foreground glow-shred" : "stat-card text-muted-foreground"}`}
+          >{t}</button>
+        ))}
       </div>
 
-      <div className="mt-6">
-        <div className="text-xs tracking-[0.25em] font-bold text-muted-foreground mb-2">COLLECTION PROGRESS</div>
-        <ProgressBar label="Collection Cards" value={cards} max={20} />
-        <ProgressBar label="Did You Know" value={dyk} max={15} />
-        <ProgressBar label="Shred Facts" value={facts} max={25} />
-      </div>
+      {tab === "CARDS" && (
+        cards.length === 0 ? (
+          <EmptyState text="No cards yet. Shred a pack to start your collection." />
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            {cards.map((c, i) => (
+              <div key={i} className="rounded-xl p-3 flex flex-col items-center text-center"
+                style={{
+                  background: `linear-gradient(180deg, oklch(0.22 0.04 150 / 90%), oklch(0.14 0.02 150 / 95%))`,
+                  border: `1px solid ${c.color}`,
+                  boxShadow: `0 0 18px ${c.color.replace(")", " / 25%)")}`,
+                }}>
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-1.5"
+                  style={{ background: `radial-gradient(circle, ${c.color.replace(")", " / 55%)")}, transparent 70%)` }}>
+                  <c.Icon className="w-6 h-6" />
+                </div>
+                <div className="font-bold text-xs leading-tight">{c.title}</div>
+                {c.rarity && (
+                  <div className="text-[9px] font-bold tracking-widest mt-1"
+                    style={{ color: RARITY_COLOR[c.rarity] }}>{c.rarity.toUpperCase()}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        )
+      )}
+
+      {tab === "FACTS" && (
+        facts.length === 0 ? (
+          <EmptyState text="No facts collected yet. Every shred teaches you something new." />
+        ) : (
+          <div className="space-y-2">
+            {facts.map((f, i) => (
+              <div key={i} className="stat-card rounded-xl p-3 flex gap-3">
+                <Lightbulb className="w-5 h-5 text-[color:var(--royal)] shrink-0 mt-0.5" />
+                <div className="text-xs leading-snug">{f.sub}</div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+
+      {tab === "REWARDS" && (
+        stables.length === 0 ? (
+          <EmptyState text="No stablecoin rewards yet. Shred a pack to earn USDM or USDT." />
+        ) : (
+          <div className="space-y-2">
+            {stables.map((s, i) => (
+              <div key={i} className="stat-card rounded-xl p-3 flex items-center gap-3">
+                <Wallet className="w-5 h-5 text-shred shrink-0" />
+                <div className="flex-1 font-bold">{s.title}</div>
+                <div className="text-[10px] text-muted-foreground tracking-widest">{s.sub}</div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
     </Sheet>
   );
 }
@@ -576,37 +790,97 @@ function ProfileStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ProgressBar({ label, value, max }: { label: string; value: number; max: number }) {
-  const pct = Math.min(100, (value / max) * 100);
+function EmptyState({ text }: { text: string }) {
   return (
-    <div className="mb-2">
-      <div className="flex justify-between text-xs mb-1">
-        <span className="font-semibold">{label}</span>
-        <span className="text-muted-foreground">{value}/{max}</span>
-      </div>
-      <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
-        <div className="h-full bg-shred" style={{ width: `${pct}%` }} />
+    <div className="stat-card rounded-2xl p-6 text-center text-xs text-muted-foreground">
+      <Gift className="w-8 h-8 mx-auto mb-2 opacity-60" />
+      {text}
+    </div>
+  );
+}
+
+/* -------------------- Sheet -------------------- */
+
+function Sheet({ title, onClose, children, Icon }: { title: string; onClose: () => void; children: React.ReactNode; Icon: React.ComponentType<{ className?: string }> }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-background/85 backdrop-blur-md flex items-end sm:items-center justify-center">
+      <div className="w-full max-w-md max-h-[92dvh] overflow-y-auto no-scrollbar rounded-t-3xl sm:rounded-3xl bg-card border border-border p-4 reveal-pop">
+        <div className="flex items-center justify-between mb-4 sticky top-0 bg-card pb-2 z-10">
+          <div className="flex items-center gap-2 min-w-0">
+            <Icon className="w-5 h-5 text-shred shrink-0" />
+            <h2 className="font-display text-2xl truncate">{title.toUpperCase()}</h2>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 rounded-full stat-card flex items-center justify-center shrink-0" aria-label="Close">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        {children}
       </div>
     </div>
   );
 }
 
-/* ----------------- Sheet ----------------- */
+/* -------------------- Onboarding -------------------- */
 
-function Sheet({ title, onClose, children, Icon }: { title: string; onClose: () => void; children: React.ReactNode; Icon: React.ComponentType<{ className?: string }> }) {
+function OnboardingOverlay({ onDone }: { onDone: () => void }) {
+  const [step, setStep] = useState(0);
+  const steps = [
+    {
+      Icon: Hand,
+      title: "SWIPE TO EXPLORE",
+      body: "Swipe left or right on the pack to browse Starter, Mystery, Alpha, Legendary and Explorer packs.",
+    },
+    {
+      Icon: Swords,
+      title: "SLASH TO SHRED",
+      body: "Drag quickly across the pack — like a claw slash — to tear it open and reveal what's inside.",
+    },
+    {
+      Icon: Gift,
+      title: "DISCOVER & COLLECT",
+      body: "Every pack drops stablecoins on Celo (USDM / USDT), XP, collectible cards, and a fact from the MiniPay ecosystem.",
+    },
+    {
+      Icon: Wallet,
+      title: "AUTO-CONNECTED",
+      body: "Open Shreds inside MiniPay and your wallet connects automatically — no setup needed.",
+    },
+  ];
+  const s = steps[step];
+  const last = step === steps.length - 1;
+
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-md flex items-end sm:items-center justify-center">
-      <div className="w-full max-w-md max-h-[92dvh] overflow-y-auto no-scrollbar rounded-t-3xl sm:rounded-3xl bg-card border border-border p-5 reveal-pop">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Icon className="w-5 h-5 text-shred" />
-            <h2 className="font-display text-2xl">{title.toUpperCase()}</h2>
-          </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-full stat-card flex items-center justify-center" aria-label="Close">
-            <X className="w-4 h-4" />
+    <div className="fixed inset-0 z-[60] bg-background/95 backdrop-blur-md flex items-center justify-center px-4">
+      <div className="w-full max-w-sm rounded-3xl bg-card border border-border p-6 reveal-pop text-center">
+        <div className="w-16 h-16 mx-auto rounded-2xl icon-tile flex items-center justify-center mb-4 glow-shred">
+          <s.Icon className="w-8 h-8 text-shred" />
+        </div>
+        <div className="font-display text-3xl text-shred text-glow-shred">{s.title}</div>
+        <p className="text-sm text-muted-foreground mt-3 leading-relaxed">{s.body}</p>
+
+        <div className="mt-5 flex items-center justify-center gap-1.5">
+          {steps.map((_, i) => (
+            <span key={i} className="h-1.5 rounded-full transition-all"
+              style={{
+                width: i === step ? 22 : 8,
+                background: i === step ? "var(--shred)" : "oklch(0.35 0.02 150)",
+              }} />
+          ))}
+        </div>
+
+        <div className="mt-6 flex gap-2">
+          <button
+            onClick={onDone}
+            className="flex-1 py-3 rounded-2xl text-xs font-bold tracking-widest stat-card text-muted-foreground"
+          >SKIP</button>
+          <button
+            onClick={() => last ? onDone() : setStep(step + 1)}
+            className="flex-[2] py-3 rounded-2xl text-xs font-bold tracking-widest bg-shred text-primary-foreground glow-shred flex items-center justify-center gap-2"
+          >
+            {last ? "START SHREDDING" : "NEXT"}
+            <ArrowRight className="w-4 h-4" />
           </button>
         </div>
-        {children}
       </div>
     </div>
   );
