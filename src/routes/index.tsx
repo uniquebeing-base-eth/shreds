@@ -492,7 +492,7 @@ function PackCarousel({
   return (
     <div
       ref={containerRef}
-      className="relative mt-4 h-[52vh] min-h-[380px] max-h-[520px] select-none touch-none"
+      className="relative mt-2 h-[38vh] min-h-[260px] max-h-[380px] select-none touch-none"
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
     >
