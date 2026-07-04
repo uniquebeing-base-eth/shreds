@@ -612,13 +612,17 @@ function RevealOverlay({ phase, reveals, pack, onClose }: {
                 }}
               >
                 <div
-                  className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
+                  className="w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden"
                   style={{
                     background: `radial-gradient(circle, ${d.color.replace(")", " / 55%)")}, transparent 70%)`,
                     border: `1px solid ${d.color.replace(")", " / 50%)")}`,
                   }}
                 >
-                  <d.Icon className="w-7 h-7" />
+                  {d.image ? (
+                    <img src={d.image} alt={d.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <d.Icon className="w-7 h-7" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
