@@ -134,7 +134,7 @@ export function BackgroundMusic() {
     <button
       onClick={toggleMute}
       aria-label={muted ? "Unmute background music" : "Mute background music"}
-      className="fixed top-2 right-2 z-40 icon-tile w-8 h-8 rounded-full flex items-center justify-center active:scale-95"
+      className="fixed bottom-12 right-2 z-40 icon-tile w-9 h-9 rounded-full flex items-center justify-center active:scale-95 shadow-lg"
     >
       {muted
         ? <VolumeX className="w-3.5 h-3.5 text-muted-foreground" />
