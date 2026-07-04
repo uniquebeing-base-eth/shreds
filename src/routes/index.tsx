@@ -421,14 +421,24 @@ function Stat({ icon, value, label }: { icon: React.ReactNode; value: string; la
   );
 }
 
+function StatCompact({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center text-center min-w-0 px-1">
+      <div className="flex items-center gap-1 min-w-0">
+        <div className="shrink-0">{icon}</div>
+        <div className="font-bold text-[11px] leading-none truncate">{value}</div>
+      </div>
+      <div className="text-[8px] font-bold tracking-[0.15em] text-muted-foreground mt-1 truncate w-full">{label}</div>
+    </div>
+  );
+}
+
 function MiniStat({ Icon, value, label, tint }: { Icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; value: string; label: string; tint: string }) {
   return (
-    <div className="stat-card rounded-xl px-3 py-2.5 flex items-center gap-2 min-w-0">
-      <Icon className="w-5 h-5 shrink-0" style={{ color: tint }} />
-      <div className="min-w-0">
-        <div className="font-bold text-sm leading-none truncate">{value}</div>
-        <div className="text-[9px] font-bold tracking-widest text-muted-foreground mt-1 truncate">{label}</div>
-      </div>
+    <div className="stat-card rounded-lg px-1.5 py-1.5 flex flex-col items-center text-center min-w-0">
+      <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: tint }} />
+      <div className="font-bold text-[11px] leading-tight mt-0.5 truncate w-full">{value}</div>
+      <div className="text-[8px] font-bold tracking-[0.15em] text-muted-foreground truncate w-full">{label}</div>
     </div>
   );
 }
