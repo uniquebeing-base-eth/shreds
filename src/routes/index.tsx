@@ -774,9 +774,13 @@ function ProfileSheet({ onClose, wallet, collection }: { onClose: () => void; wa
                   border: `1px solid ${c.color}`,
                   boxShadow: `0 0 18px ${c.color.replace(")", " / 25%)")}`,
                 }}>
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-1.5"
-                  style={{ background: `radial-gradient(circle, ${c.color.replace(")", " / 55%)")}, transparent 70%)` }}>
-                  <c.Icon className="w-6 h-6" />
+                <div className="w-full aspect-[3/4] rounded-lg overflow-hidden flex items-center justify-center mb-1.5"
+                  style={{ background: `radial-gradient(circle, ${c.color.replace(")", " / 45%)")}, transparent 70%)` }}>
+                  {c.image ? (
+                    <img src={c.image} alt={c.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <c.Icon className="w-8 h-8" />
+                  )}
                 </div>
                 <div className="font-bold text-xs leading-tight">{c.title}</div>
                 {c.rarity && (
