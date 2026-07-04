@@ -5,6 +5,7 @@ import {
   Sparkles, Lightbulb, X, ChevronLeft, ChevronRight, Award, Zap,
   ArrowRight, Hand, Swords,
 } from "lucide-react";
+import { BackgroundMusic } from "@/components/BackgroundMusic";
 // Assets served from /public for portable Cloudflare deploys.
 // Add more packs or cards by dropping PNGs into public/packs or public/cards
 // and referencing them below — no other wiring required.
