@@ -5,12 +5,21 @@ import {
   Sparkles, Lightbulb, X, ChevronLeft, ChevronRight, Award, Zap,
   ArrowRight, Hand, Swords,
 } from "lucide-react";
-import starterAsset from "@/assets/pack-starter.png.asset.json";
-import mysteryAsset from "@/assets/pack-mystery.png.asset.json";
-import alphaAsset from "@/assets/pack-alpha.png.asset.json";
-import legendaryAsset from "@/assets/pack-legendary.png.asset.json";
-import explorerAsset from "@/assets/pack-explorer.png.asset.json";
-import wordmarkAsset from "@/assets/shreds-wordmark.png.asset.json";
+// Assets served from /public for portable Cloudflare deploys.
+// Add more packs or cards by dropping PNGs into public/packs or public/cards
+// and referencing them below — no other wiring required.
+const PACK_IMG = {
+  starter: "/packs/starter.png",
+  mystery: "/packs/mystery.png",
+  alpha: "/packs/alpha.png",
+  legendary: "/packs/legendary.png",
+  explorer: "/packs/explorer.png",
+};
+const WORDMARK_SRC = "/shreds-wordmark.png";
+export const CARD_LIBRARY = {
+  "celo-compass": "/cards/celo-compass.png",
+  "minipay-sigil": "/cards/minipay-sigil.png",
+};
 
 export const Route = createFileRoute("/")({ component: HomeScreen });
 
