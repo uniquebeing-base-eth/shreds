@@ -29,11 +29,11 @@ type Pack = {
 };
 
 const PACKS: Pack[] = [
-  { id: "starter", name: "Starter Pack", image: starterAsset.url, accent: "oklch(0.88 0.28 135)", glow: "oklch(0.88 0.28 135 / 55%)", price: "FREE", owners: "102K+", shredded: "248K+", discoveries: "127+" },
-  { id: "mystery", name: "Mystery Pack", image: mysteryAsset.url, accent: "oklch(0.68 0.22 300)", glow: "oklch(0.68 0.22 300 / 55%)", price: "1.00 USDM", owners: "58K+", shredded: "142K+", discoveries: "89+" },
-  { id: "alpha", name: "Alpha Pack", image: alphaAsset.url, accent: "oklch(0.82 0.17 85)", glow: "oklch(0.82 0.17 85 / 55%)", price: "2.50 USDM", owners: "24K+", shredded: "71K+", discoveries: "54+" },
-  { id: "legendary", name: "Legendary Pack", image: legendaryAsset.url, accent: "oklch(0.78 0.2 60)", glow: "oklch(0.78 0.2 60 / 55%)", price: "10.00 USDM", owners: "6.2K+", shredded: "18K+", discoveries: "32+" },
-  { id: "explorer", name: "Explorer Pack", image: explorerAsset.url, accent: "oklch(0.85 0.18 75)", glow: "oklch(0.85 0.18 75 / 55%)", price: "25.00 USDM", owners: "812", shredded: "2.1K", discoveries: "18+" },
+  { id: "starter", name: "Starter Pack", image: PACK_IMG.starter, accent: "oklch(0.88 0.28 135)", glow: "oklch(0.88 0.28 135 / 55%)", price: "FREE", owners: "102K+", shredded: "248K+", discoveries: "127+" },
+  { id: "mystery", name: "Mystery Pack", image: PACK_IMG.mystery, accent: "oklch(0.68 0.22 300)", glow: "oklch(0.68 0.22 300 / 55%)", price: "1.00 USDM", owners: "58K+", shredded: "142K+", discoveries: "89+" },
+  { id: "alpha", name: "Alpha Pack", image: PACK_IMG.alpha, accent: "oklch(0.82 0.17 85)", glow: "oklch(0.82 0.17 85 / 55%)", price: "2.50 USDM", owners: "24K+", shredded: "71K+", discoveries: "54+" },
+  { id: "legendary", name: "Legendary Pack", image: PACK_IMG.legendary, accent: "oklch(0.78 0.2 60)", glow: "oklch(0.78 0.2 60 / 55%)", price: "10.00 USDM", owners: "6.2K+", shredded: "18K+", discoveries: "32+" },
+  { id: "explorer", name: "Explorer Pack", image: PACK_IMG.explorer, accent: "oklch(0.85 0.18 75)", glow: "oklch(0.85 0.18 75 / 55%)", price: "25.00 USDM", owners: "812", shredded: "2.1K", discoveries: "18+" },
 ];
 
 /* -------------------- Facts (100) -------------------- */
