@@ -287,28 +287,28 @@ function HomeScreen() {
   const closeReveal = () => { setPhase("idle"); setReveals([]); };
 
   return (
-    <div className="min-h-dvh w-full text-foreground pb-24">
-      <div className="mx-auto w-full max-w-md px-3 pt-4">
+    <div className="min-h-dvh w-full text-foreground pb-20">
+      <div className="mx-auto w-full max-w-md px-3 pt-3">
         {/* Header */}
-        <header className="grid grid-cols-[52px_1fr_52px] items-center gap-2">
+        <header className="grid grid-cols-[44px_1fr_44px] items-center gap-2">
           <button
             onClick={() => setShowLeaderboard(true)}
-            className="flex flex-col items-center gap-1 group"
+            className="flex flex-col items-center gap-0.5 group"
             aria-label="Leaderboard"
           >
-            <div className="icon-tile w-12 h-12 rounded-2xl flex items-center justify-center group-active:scale-95 transition">
-              <Trophy className="w-6 h-6 text-[color:var(--gold)]" />
+            <div className="icon-tile w-10 h-10 rounded-xl flex items-center justify-center group-active:scale-95 transition">
+              <Trophy className="w-5 h-5 text-[color:var(--gold)]" />
             </div>
-            <span className="text-[9px] font-semibold tracking-widest text-muted-foreground">LEADER</span>
+            <span className="text-[8px] font-semibold tracking-[0.18em] text-muted-foreground">LEADER</span>
           </button>
 
           <div className="flex flex-col items-center min-w-0">
             <img
-              src={wordmarkAsset.url}
+              src={WORDMARK_SRC}
               alt="Shreds"
-              className="h-16 w-auto max-w-full object-contain drop-shadow-[0_0_25px_oklch(0.88_0.28_135/0.45)]"
+              className="h-14 w-auto max-w-full object-contain drop-shadow-[0_0_25px_oklch(0.88_0.28_135/0.55)]"
             />
-            <div className="mt-0.5 text-[10px] font-bold tracking-[0.22em] whitespace-nowrap">
+            <div className="mt-0.5 text-[9px] font-bold tracking-[0.22em] whitespace-nowrap">
               <span className="text-foreground">DISCOVER. </span>
               <span className="text-shred">COLLECT. </span>
               <span className="text-[color:var(--gold)]">EARN.</span>
@@ -317,24 +317,24 @@ function HomeScreen() {
 
           <button
             onClick={() => setShowProfile(true)}
-            className="flex flex-col items-center gap-1 group"
+            className="flex flex-col items-center gap-0.5 group"
             aria-label="Profile"
           >
-            <div className="icon-tile w-12 h-12 rounded-2xl flex items-center justify-center overflow-hidden group-active:scale-95 transition">
+            <div className="icon-tile w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden group-active:scale-95 transition">
               <div className="w-full h-full flex items-center justify-center" style={{ background: AVATAR_GRADIENTS[0] }}>
-                <User className="w-6 h-6 text-white" />
+                <User className="w-5 h-5 text-white" />
               </div>
             </div>
-            <span className="text-[9px] font-semibold tracking-widest text-muted-foreground">PROFILE</span>
+            <span className="text-[8px] font-semibold tracking-[0.18em] text-muted-foreground">PROFILE</span>
           </button>
         </header>
 
-        {/* Stats row - 2x2 on mobile */}
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <Stat icon={<Users className="w-4 h-4 text-shred" />} value="184K+" label="SHREDDERS" />
-          <Stat icon={<Package className="w-4 h-4 text-[color:oklch(0.7_0.18_240)]" />} value="2.8M+" label="PACKS SHREDDED" />
-          <Stat icon={<Gem className="w-4 h-4 text-[color:var(--royal)]" />} value="945K+" label="DISCOVERIES" />
-          <Stat icon={<Wallet className="w-4 h-4 text-[color:var(--gold)]" />} value="$126K+" label="REWARDS CLAIMED" />
+        {/* Stats row - single horizontal row */}
+        <div className="mt-3 stat-card rounded-xl px-2 py-2 grid grid-cols-4 gap-1">
+          <StatCompact icon={<Users className="w-3.5 h-3.5 text-shred" />} value="184K+" label="SHREDDERS" />
+          <StatCompact icon={<Package className="w-3.5 h-3.5 text-[color:oklch(0.7_0.18_240)]" />} value="2.8M+" label="SHREDDED" />
+          <StatCompact icon={<Gem className="w-3.5 h-3.5 text-[color:var(--royal)]" />} value="945K+" label="DISCOVERIES" />
+          <StatCompact icon={<Wallet className="w-3.5 h-3.5 text-[color:var(--gold)]" />} value="$126K+" label="REWARDS" />
         </div>
 
         {/* Pack carousel */}
@@ -346,12 +346,12 @@ function HomeScreen() {
           phase={phase}
         />
 
-        {/* Pack details - 2x2 on mobile */}
-        <div className="mt-4 grid grid-cols-2 gap-2">
+        {/* Pack details - single row */}
+        <div className="mt-3 grid grid-cols-4 gap-1.5">
           <MiniStat Icon={Star} value={pack.price} label="PRICE" tint="oklch(0.88 0.28 135)" />
           <MiniStat Icon={Users} value={pack.owners} label="OWNERS" tint="oklch(0.7 0.2 145)" />
           <MiniStat Icon={Flame} value={pack.shredded} label="SHREDDED" tint="oklch(0.75 0.2 45)" />
-          <MiniStat Icon={Gift} value={pack.discoveries} label="DISCOVERIES" tint="oklch(0.68 0.22 300)" />
+          <MiniStat Icon={Gift} value={pack.discoveries} label="DROPS" tint="oklch(0.68 0.22 300)" />
         </div>
 
         {/* Dots */}
