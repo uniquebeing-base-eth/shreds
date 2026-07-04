@@ -5,12 +5,21 @@ import {
   Sparkles, Lightbulb, X, ChevronLeft, ChevronRight, Award, Zap,
   ArrowRight, Hand, Swords,
 } from "lucide-react";
-import starterAsset from "@/assets/pack-starter.png.asset.json";
-import mysteryAsset from "@/assets/pack-mystery.png.asset.json";
-import alphaAsset from "@/assets/pack-alpha.png.asset.json";
-import legendaryAsset from "@/assets/pack-legendary.png.asset.json";
-import explorerAsset from "@/assets/pack-explorer.png.asset.json";
-import wordmarkAsset from "@/assets/shreds-wordmark.png.asset.json";
+// Assets served from /public for portable Cloudflare deploys.
+// Add more packs or cards by dropping PNGs into public/packs or public/cards
+// and referencing them below — no other wiring required.
+const PACK_IMG = {
+  starter: "/packs/starter.png",
+  mystery: "/packs/mystery.png",
+  alpha: "/packs/alpha.png",
+  legendary: "/packs/legendary.png",
+  explorer: "/packs/explorer.png",
+};
+const WORDMARK_SRC = "/shreds-wordmark.png";
+export const CARD_LIBRARY = {
+  "celo-compass": "/cards/celo-compass.png",
+  "minipay-sigil": "/cards/minipay-sigil.png",
+};
 
 export const Route = createFileRoute("/")({ component: HomeScreen });
 
@@ -20,11 +29,11 @@ type Pack = {
 };
 
 const PACKS: Pack[] = [
-  { id: "starter", name: "Starter Pack", image: starterAsset.url, accent: "oklch(0.88 0.28 135)", glow: "oklch(0.88 0.28 135 / 55%)", price: "FREE", owners: "102K+", shredded: "248K+", discoveries: "127+" },
-  { id: "mystery", name: "Mystery Pack", image: mysteryAsset.url, accent: "oklch(0.68 0.22 300)", glow: "oklch(0.68 0.22 300 / 55%)", price: "1.00 USDM", owners: "58K+", shredded: "142K+", discoveries: "89+" },
-  { id: "alpha", name: "Alpha Pack", image: alphaAsset.url, accent: "oklch(0.82 0.17 85)", glow: "oklch(0.82 0.17 85 / 55%)", price: "2.50 USDM", owners: "24K+", shredded: "71K+", discoveries: "54+" },
-  { id: "legendary", name: "Legendary Pack", image: legendaryAsset.url, accent: "oklch(0.78 0.2 60)", glow: "oklch(0.78 0.2 60 / 55%)", price: "10.00 USDM", owners: "6.2K+", shredded: "18K+", discoveries: "32+" },
-  { id: "explorer", name: "Explorer Pack", image: explorerAsset.url, accent: "oklch(0.85 0.18 75)", glow: "oklch(0.85 0.18 75 / 55%)", price: "25.00 USDM", owners: "812", shredded: "2.1K", discoveries: "18+" },
+  { id: "starter", name: "Starter Pack", image: PACK_IMG.starter, accent: "oklch(0.88 0.28 135)", glow: "oklch(0.88 0.28 135 / 55%)", price: "FREE", owners: "102K+", shredded: "248K+", discoveries: "127+" },
+  { id: "mystery", name: "Mystery Pack", image: PACK_IMG.mystery, accent: "oklch(0.68 0.22 300)", glow: "oklch(0.68 0.22 300 / 55%)", price: "1.00 USDM", owners: "58K+", shredded: "142K+", discoveries: "89+" },
+  { id: "alpha", name: "Alpha Pack", image: PACK_IMG.alpha, accent: "oklch(0.82 0.17 85)", glow: "oklch(0.82 0.17 85 / 55%)", price: "2.50 USDM", owners: "24K+", shredded: "71K+", discoveries: "54+" },
+  { id: "legendary", name: "Legendary Pack", image: PACK_IMG.legendary, accent: "oklch(0.78 0.2 60)", glow: "oklch(0.78 0.2 60 / 55%)", price: "10.00 USDM", owners: "6.2K+", shredded: "18K+", discoveries: "32+" },
+  { id: "explorer", name: "Explorer Pack", image: PACK_IMG.explorer, accent: "oklch(0.85 0.18 75)", glow: "oklch(0.85 0.18 75 / 55%)", price: "25.00 USDM", owners: "812", shredded: "2.1K", discoveries: "18+" },
 ];
 
 /* -------------------- Facts (100) -------------------- */
@@ -278,28 +287,28 @@ function HomeScreen() {
   const closeReveal = () => { setPhase("idle"); setReveals([]); };
 
   return (
-    <div className="min-h-dvh w-full text-foreground pb-24">
-      <div className="mx-auto w-full max-w-md px-3 pt-4">
+    <div className="min-h-dvh w-full text-foreground pb-20">
+      <div className="mx-auto w-full max-w-md px-3 pt-3">
         {/* Header */}
-        <header className="grid grid-cols-[52px_1fr_52px] items-center gap-2">
+        <header className="grid grid-cols-[44px_1fr_44px] items-center gap-2">
           <button
             onClick={() => setShowLeaderboard(true)}
-            className="flex flex-col items-center gap-1 group"
+            className="flex flex-col items-center gap-0.5 group"
             aria-label="Leaderboard"
           >
-            <div className="icon-tile w-12 h-12 rounded-2xl flex items-center justify-center group-active:scale-95 transition">
-              <Trophy className="w-6 h-6 text-[color:var(--gold)]" />
+            <div className="icon-tile w-10 h-10 rounded-xl flex items-center justify-center group-active:scale-95 transition">
+              <Trophy className="w-5 h-5 text-[color:var(--gold)]" />
             </div>
-            <span className="text-[9px] font-semibold tracking-widest text-muted-foreground">LEADER</span>
+            <span className="text-[8px] font-semibold tracking-[0.18em] text-muted-foreground">LEADER</span>
           </button>
 
           <div className="flex flex-col items-center min-w-0">
             <img
-              src={wordmarkAsset.url}
+              src={WORDMARK_SRC}
               alt="Shreds"
-              className="h-16 w-auto max-w-full object-contain drop-shadow-[0_0_25px_oklch(0.88_0.28_135/0.45)]"
+              className="h-14 w-auto max-w-full object-contain drop-shadow-[0_0_25px_oklch(0.88_0.28_135/0.55)]"
             />
-            <div className="mt-0.5 text-[10px] font-bold tracking-[0.22em] whitespace-nowrap">
+            <div className="mt-0.5 text-[9px] font-bold tracking-[0.22em] whitespace-nowrap">
               <span className="text-foreground">DISCOVER. </span>
               <span className="text-shred">COLLECT. </span>
               <span className="text-[color:var(--gold)]">EARN.</span>
@@ -308,24 +317,24 @@ function HomeScreen() {
 
           <button
             onClick={() => setShowProfile(true)}
-            className="flex flex-col items-center gap-1 group"
+            className="flex flex-col items-center gap-0.5 group"
             aria-label="Profile"
           >
-            <div className="icon-tile w-12 h-12 rounded-2xl flex items-center justify-center overflow-hidden group-active:scale-95 transition">
+            <div className="icon-tile w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden group-active:scale-95 transition">
               <div className="w-full h-full flex items-center justify-center" style={{ background: AVATAR_GRADIENTS[0] }}>
-                <User className="w-6 h-6 text-white" />
+                <User className="w-5 h-5 text-white" />
               </div>
             </div>
-            <span className="text-[9px] font-semibold tracking-widest text-muted-foreground">PROFILE</span>
+            <span className="text-[8px] font-semibold tracking-[0.18em] text-muted-foreground">PROFILE</span>
           </button>
         </header>
 
-        {/* Stats row - 2x2 on mobile */}
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <Stat icon={<Users className="w-4 h-4 text-shred" />} value="184K+" label="SHREDDERS" />
-          <Stat icon={<Package className="w-4 h-4 text-[color:oklch(0.7_0.18_240)]" />} value="2.8M+" label="PACKS SHREDDED" />
-          <Stat icon={<Gem className="w-4 h-4 text-[color:var(--royal)]" />} value="945K+" label="DISCOVERIES" />
-          <Stat icon={<Wallet className="w-4 h-4 text-[color:var(--gold)]" />} value="$126K+" label="REWARDS CLAIMED" />
+        {/* Stats row - single horizontal row */}
+        <div className="mt-3 stat-card rounded-xl px-2 py-2 grid grid-cols-4 gap-1">
+          <StatCompact icon={<Users className="w-3.5 h-3.5 text-shred" />} value="184K+" label="SHREDDERS" />
+          <StatCompact icon={<Package className="w-3.5 h-3.5 text-[color:oklch(0.7_0.18_240)]" />} value="2.8M+" label="SHREDDED" />
+          <StatCompact icon={<Gem className="w-3.5 h-3.5 text-[color:var(--royal)]" />} value="945K+" label="DISCOVERIES" />
+          <StatCompact icon={<Wallet className="w-3.5 h-3.5 text-[color:var(--gold)]" />} value="$126K+" label="REWARDS" />
         </div>
 
         {/* Pack carousel */}
@@ -337,12 +346,12 @@ function HomeScreen() {
           phase={phase}
         />
 
-        {/* Pack details - 2x2 on mobile */}
-        <div className="mt-4 grid grid-cols-2 gap-2">
+        {/* Pack details - single row */}
+        <div className="mt-3 grid grid-cols-4 gap-1.5">
           <MiniStat Icon={Star} value={pack.price} label="PRICE" tint="oklch(0.88 0.28 135)" />
           <MiniStat Icon={Users} value={pack.owners} label="OWNERS" tint="oklch(0.7 0.2 145)" />
           <MiniStat Icon={Flame} value={pack.shredded} label="SHREDDED" tint="oklch(0.75 0.2 45)" />
-          <MiniStat Icon={Gift} value={pack.discoveries} label="DISCOVERIES" tint="oklch(0.68 0.22 300)" />
+          <MiniStat Icon={Gift} value={pack.discoveries} label="DROPS" tint="oklch(0.68 0.22 300)" />
         </div>
 
         {/* Dots */}
@@ -412,14 +421,24 @@ function Stat({ icon, value, label }: { icon: React.ReactNode; value: string; la
   );
 }
 
+function StatCompact({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center text-center min-w-0 px-1">
+      <div className="flex items-center gap-1 min-w-0">
+        <div className="shrink-0">{icon}</div>
+        <div className="font-bold text-[11px] leading-none truncate">{value}</div>
+      </div>
+      <div className="text-[8px] font-bold tracking-[0.15em] text-muted-foreground mt-1 truncate w-full">{label}</div>
+    </div>
+  );
+}
+
 function MiniStat({ Icon, value, label, tint }: { Icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; value: string; label: string; tint: string }) {
   return (
-    <div className="stat-card rounded-xl px-3 py-2.5 flex items-center gap-2 min-w-0">
-      <Icon className="w-5 h-5 shrink-0" style={{ color: tint }} />
-      <div className="min-w-0">
-        <div className="font-bold text-sm leading-none truncate">{value}</div>
-        <div className="text-[9px] font-bold tracking-widest text-muted-foreground mt-1 truncate">{label}</div>
-      </div>
+    <div className="stat-card rounded-lg px-1.5 py-1.5 flex flex-col items-center text-center min-w-0">
+      <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: tint }} />
+      <div className="font-bold text-[11px] leading-tight mt-0.5 truncate w-full">{value}</div>
+      <div className="text-[8px] font-bold tracking-[0.15em] text-muted-foreground truncate w-full">{label}</div>
     </div>
   );
 }
@@ -473,7 +492,7 @@ function PackCarousel({
   return (
     <div
       ref={containerRef}
-      className="relative mt-4 h-[52vh] min-h-[380px] max-h-[520px] select-none touch-none"
+      className="relative mt-2 h-[38vh] min-h-[260px] max-h-[380px] select-none touch-none"
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
     >
@@ -616,21 +635,21 @@ function RevealOverlay({ phase, reveals, pack, onClose }: {
 
 function LiveTicker({ event, idx }: { event: typeof LIVE_EVENTS[number]; idx: number }) {
   return (
-    <div className="fixed bottom-3 inset-x-0 flex justify-center px-3 z-30 pointer-events-none">
-      <div key={idx} className="ticker-in stat-card rounded-2xl px-3 py-2 flex items-center gap-2 w-full max-w-md pointer-events-auto">
-        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-shred/15 text-shred text-[10px] font-bold tracking-wider shrink-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-shred animate-pulse" /> LIVE
+    <div className="fixed bottom-2 inset-x-0 flex justify-center px-2 z-30 pointer-events-none">
+      <div key={idx} className="ticker-in stat-card rounded-full px-2.5 py-1 flex items-center gap-1.5 w-full max-w-md pointer-events-auto">
+        <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-shred/15 text-shred text-[9px] font-bold tracking-wider shrink-0">
+          <span className="w-1 h-1 rounded-full bg-shred animate-pulse" /> LIVE
         </div>
         <div
-          className="w-6 h-6 rounded-full shrink-0"
+          className="w-4 h-4 rounded-full shrink-0"
           style={{ background: AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length] }}
         />
-        <div className="text-[11px] flex-1 truncate min-w-0">
+        <div className="text-[10px] flex-1 truncate min-w-0">
           <span className="font-bold">{event.user}</span>{" "}
           <span className="text-muted-foreground">{event.text}</span>{" "}
           <span className="font-bold text-shred">{event.accent}</span>
         </div>
-        <Zap className="w-4 h-4 text-shred shrink-0" />
+        <Zap className="w-3 h-3 text-shred shrink-0" />
       </div>
     </div>
   );
