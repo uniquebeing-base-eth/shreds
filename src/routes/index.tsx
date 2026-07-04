@@ -16,9 +16,18 @@ const PACK_IMG = {
   explorer: "/packs/explorer.png",
 };
 const WORDMARK_SRC = "/shreds-wordmark.png";
-export const CARD_LIBRARY = {
+export const CARD_LIBRARY: Record<string, string> = {
   "celo-compass": "/cards/celo-compass.png",
   "minipay-sigil": "/cards/minipay-sigil.png",
+  "neon-cube": "/cards/neon-cube.jpg",
+  "celo-orbis": "/cards/celo-orbis.png",
+  "celo-genesis-core": "/cards/celo-genesis-core.png",
+  "celo-genesis-shard": "/cards/celo-genesis-shard.png",
+  "celo-relic-ring": "/cards/celo-relic-ring.png",
+  "trust-lens": "/cards/trust-lens.png",
+  "minipay-prism": "/cards/minipay-prism.png",
+  "celo-sentinel": "/cards/celo-sentinel.png",
+  "minipay-transceiver": "/cards/minipay-transceiver.png",
 };
 
 export const Route = createFileRoute("/")({ component: HomeScreen });
@@ -145,6 +154,7 @@ type Discovery = {
   kind: "USDM" | "USDT" | "XP" | "CARD" | "FACT";
   title: string; sub: string; color: string; Icon: React.ComponentType<{ className?: string }>;
   rarity?: "Common" | "Rare" | "Epic" | "Legendary";
+  image?: string;
 };
 
 const STABLES: Discovery[] = [
@@ -160,10 +170,17 @@ const XPS: Discovery[] = [
   { kind: "XP", title: "500 XP", sub: "Experience Points", color: "oklch(0.7 0.2 250)", Icon: Star, rarity: "Epic" },
 ];
 const CARDS: Discovery[] = [
-  { kind: "CARD", title: "Neon Cube", sub: "Collection Card", color: "oklch(0.7 0.22 300)", Icon: Award, rarity: "Rare" },
-  { kind: "CARD", title: "Celo Compass", sub: "Collection Card", color: "oklch(0.75 0.2 145)", Icon: Award, rarity: "Rare" },
-  { kind: "CARD", title: "MiniPay Sigil", sub: "Collection Card", color: "oklch(0.78 0.2 85)", Icon: Award, rarity: "Epic" },
-  { kind: "CARD", title: "Golden Shard", sub: "Collection Card", color: "oklch(0.82 0.17 85)", Icon: Award, rarity: "Legendary" },
+  { kind: "CARD", title: "Neon Cube", sub: "Chance. Mystery. Reward.", color: "oklch(0.75 0.18 180)", Icon: Award, rarity: "Rare", image: CARD_LIBRARY["neon-cube"] },
+  { kind: "CARD", title: "Celo Compass", sub: "Navigate the Celo ecosystem.", color: "oklch(0.75 0.2 145)", Icon: Award, rarity: "Rare", image: CARD_LIBRARY["celo-compass"] },
+  { kind: "CARD", title: "MiniPay Sigil", sub: "Trust. Connect. Transfer.", color: "oklch(0.7 0.22 300)", Icon: Award, rarity: "Rare", image: CARD_LIBRARY["minipay-sigil"] },
+  { kind: "CARD", title: "Celo Orbis", sub: "The heart of decentralized trust.", color: "oklch(0.7 0.22 300)", Icon: Award, rarity: "Epic", image: CARD_LIBRARY["celo-orbis"] },
+  { kind: "CARD", title: "Celo Relic Ring", sub: "Powered by legacy.", color: "oklch(0.85 0.22 130)", Icon: Award, rarity: "Epic", image: CARD_LIBRARY["celo-relic-ring"] },
+  { kind: "CARD", title: "Trust Lens", sub: "See beyond. Trust deeper.", color: "oklch(0.7 0.22 300)", Icon: Award, rarity: "Epic", image: CARD_LIBRARY["trust-lens"] },
+  { kind: "CARD", title: "Celo Sentinel", sub: "Protect. Verify. Empower.", color: "oklch(0.82 0.22 135)", Icon: Award, rarity: "Epic", image: CARD_LIBRARY["celo-sentinel"] },
+  { kind: "CARD", title: "MiniPay Transceiver", sub: "Send value. Anywhere. Instantly.", color: "oklch(0.7 0.22 300)", Icon: Award, rarity: "Epic", image: CARD_LIBRARY["minipay-transceiver"] },
+  { kind: "CARD", title: "Celo Genesis Core", sub: "Trust isn't given. It's protocol.", color: "oklch(0.82 0.17 85)", Icon: Award, rarity: "Legendary", image: CARD_LIBRARY["celo-genesis-core"] },
+  { kind: "CARD", title: "Celo Genesis Shard", sub: "Origins power everything.", color: "oklch(0.82 0.17 85)", Icon: Award, rarity: "Legendary", image: CARD_LIBRARY["celo-genesis-shard"] },
+  { kind: "CARD", title: "MiniPay Prism", sub: "Value flows. Trust remains.", color: "oklch(0.85 0.22 130)", Icon: Award, rarity: "Legendary", image: CARD_LIBRARY["minipay-prism"] },
 ];
 
 function pickRandom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
