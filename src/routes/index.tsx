@@ -307,25 +307,25 @@ function HomeScreen() {
     <div className="min-h-dvh w-full text-foreground pb-20">
       <div className="mx-auto w-full max-w-md px-3 pt-3">
         {/* Header */}
-        <header className="grid grid-cols-[44px_1fr_44px] items-center gap-2">
+        <header className="grid grid-cols-[40px_1fr_40px] items-center gap-2">
           <button
             onClick={() => setShowLeaderboard(true)}
             className="flex flex-col items-center gap-0.5 group"
             aria-label="Leaderboard"
           >
-            <div className="icon-tile w-10 h-10 rounded-xl flex items-center justify-center group-active:scale-95 transition">
-              <Trophy className="w-5 h-5 text-[color:var(--gold)]" />
+            <div className="icon-tile w-9 h-9 rounded-lg flex items-center justify-center group-active:scale-95 transition">
+              <Trophy className="w-4 h-4 text-[color:var(--gold)]" />
             </div>
-            <span className="text-[8px] font-semibold tracking-[0.18em] text-muted-foreground">LEADER</span>
+            <span className="text-[7px] font-semibold tracking-[0.16em] text-muted-foreground">LEADER</span>
           </button>
 
           <div className="flex flex-col items-center min-w-0">
             <img
               src={WORDMARK_SRC}
               alt="Shreds"
-              className="h-14 w-auto max-w-full object-contain drop-shadow-[0_0_25px_oklch(0.88_0.28_135/0.55)]"
+              className="h-20 w-auto max-w-full object-contain drop-shadow-[0_0_28px_oklch(0.88_0.28_135/0.6)]"
             />
-            <div className="mt-0.5 text-[9px] font-bold tracking-[0.22em] whitespace-nowrap">
+            <div className="mt-0.5 text-[8px] font-bold tracking-[0.22em] whitespace-nowrap">
               <span className="text-foreground">DISCOVER. </span>
               <span className="text-shred">COLLECT. </span>
               <span className="text-[color:var(--gold)]">EARN.</span>
@@ -337,21 +337,21 @@ function HomeScreen() {
             className="flex flex-col items-center gap-0.5 group"
             aria-label="Profile"
           >
-            <div className="icon-tile w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden group-active:scale-95 transition">
+            <div className="icon-tile w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden group-active:scale-95 transition">
               <div className="w-full h-full flex items-center justify-center" style={{ background: AVATAR_GRADIENTS[0] }}>
-                <User className="w-5 h-5 text-white" />
+                <User className="w-4 h-4 text-white" />
               </div>
             </div>
-            <span className="text-[8px] font-semibold tracking-[0.18em] text-muted-foreground">PROFILE</span>
+            <span className="text-[7px] font-semibold tracking-[0.16em] text-muted-foreground">PROFILE</span>
           </button>
         </header>
 
         {/* Stats row - single horizontal row */}
-        <div className="mt-3 stat-card rounded-xl px-2 py-2 grid grid-cols-4 gap-1">
-          <StatCompact icon={<Users className="w-3.5 h-3.5 text-shred" />} value="184K+" label="SHREDDERS" />
-          <StatCompact icon={<Package className="w-3.5 h-3.5 text-[color:oklch(0.7_0.18_240)]" />} value="2.8M+" label="SHREDDED" />
-          <StatCompact icon={<Gem className="w-3.5 h-3.5 text-[color:var(--royal)]" />} value="945K+" label="DISCOVERIES" />
-          <StatCompact icon={<Wallet className="w-3.5 h-3.5 text-[color:var(--gold)]" />} value="$126K+" label="REWARDS" />
+        <div className="mt-2 stat-card rounded-lg px-1.5 py-1 grid grid-cols-4 gap-0.5">
+          <StatCompact icon={<Users className="w-3 h-3 text-shred" />} value="184K+" label="SHREDDERS" />
+          <StatCompact icon={<Package className="w-3 h-3 text-[color:oklch(0.7_0.18_240)]" />} value="2.8M+" label="SHREDDED" />
+          <StatCompact icon={<Gem className="w-3 h-3 text-[color:var(--royal)]" />} value="945K+" label="DISCOVER" />
+          <StatCompact icon={<Wallet className="w-3 h-3 text-[color:var(--gold)]" />} value="$126K+" label="REWARDS" />
         </div>
 
         {/* Pack carousel */}
@@ -364,10 +364,10 @@ function HomeScreen() {
         />
 
         {/* Pack details - single row */}
-        <div className="mt-3 grid grid-cols-4 gap-1.5">
+        <div className="mt-2 grid grid-cols-4 gap-1">
           <MiniStat Icon={Star} value={pack.price} label="PRICE" tint="oklch(0.88 0.28 135)" />
           <MiniStat Icon={Users} value={pack.owners} label="OWNERS" tint="oklch(0.7 0.2 145)" />
-          <MiniStat Icon={Flame} value={pack.shredded} label="SHREDDED" tint="oklch(0.75 0.2 45)" />
+          <MiniStat Icon={Flame} value={pack.shredded} label="SHRED" tint="oklch(0.75 0.2 45)" />
           <MiniStat Icon={Gift} value={pack.discoveries} label="DROPS" tint="oklch(0.68 0.22 300)" />
         </div>
 
@@ -440,22 +440,22 @@ function Stat({ icon, value, label }: { icon: React.ReactNode; value: string; la
 
 function StatCompact({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
   return (
-    <div className="flex flex-col items-center justify-center text-center min-w-0 px-1">
-      <div className="flex items-center gap-1 min-w-0">
+    <div className="flex flex-col items-center justify-center text-center min-w-0 px-0.5 py-0.5">
+      <div className="flex items-center gap-0.5 min-w-0">
         <div className="shrink-0">{icon}</div>
-        <div className="font-bold text-[11px] leading-none truncate">{value}</div>
+        <div className="font-bold text-[10px] leading-none truncate">{value}</div>
       </div>
-      <div className="text-[8px] font-bold tracking-[0.15em] text-muted-foreground mt-1 truncate w-full">{label}</div>
+      <div className="text-[7px] font-bold tracking-[0.12em] text-muted-foreground mt-0.5 truncate w-full">{label}</div>
     </div>
   );
 }
 
 function MiniStat({ Icon, value, label, tint }: { Icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; value: string; label: string; tint: string }) {
   return (
-    <div className="stat-card rounded-lg px-1.5 py-1.5 flex flex-col items-center text-center min-w-0">
-      <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: tint }} />
-      <div className="font-bold text-[11px] leading-tight mt-0.5 truncate w-full">{value}</div>
-      <div className="text-[8px] font-bold tracking-[0.15em] text-muted-foreground truncate w-full">{label}</div>
+    <div className="stat-card rounded-md px-1 py-1 flex flex-col items-center text-center min-w-0">
+      <Icon className="w-3 h-3 shrink-0" style={{ color: tint }} />
+      <div className="font-bold text-[10px] leading-tight mt-0.5 truncate w-full">{value}</div>
+      <div className="text-[7px] font-bold tracking-[0.12em] text-muted-foreground truncate w-full">{label}</div>
     </div>
   );
 }
@@ -509,7 +509,7 @@ function PackCarousel({
   return (
     <div
       ref={containerRef}
-      className="relative mt-2 h-[38vh] min-h-[260px] max-h-[380px] select-none touch-none"
+      className="relative mt-2 h-[54vh] min-h-[380px] max-h-[560px] select-none touch-none"
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
     >
