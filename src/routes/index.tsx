@@ -421,6 +421,7 @@ function HomeScreen() {
       {showLeaderboard && <LeaderboardSheet onClose={() => setShowLeaderboard(false)} />}
       {showProfile && <ProfileSheet onClose={() => setShowProfile(false)} wallet={wallet.address} collection={collection} />}
       {showOnboarding && <OnboardingOverlay onDone={finishOnboarding} />}
+      <BackgroundMusic />
     </div>
   );
 }
