@@ -2,19 +2,37 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Trophy, User, Users, Package, Gem, Wallet, Flame, Gift, Star,
-  Sparkles, Lightbulb, X, ChevronLeft, ChevronRight, Award, Zap,
-  ArrowRight, Hand, Swords,
+  Lightbulb, X, ChevronLeft, ChevronRight, Award, Zap,
+  ArrowRight, Hand, Swords, AlertTriangle,
 } from "lucide-react";
 import { BackgroundMusic } from "@/components/BackgroundMusic";
-// Assets served from /public for portable Cloudflare deploys.
-// Add more packs or cards by dropping PNGs into public/packs or public/cards
-// and referencing them below — no other wiring required.
-const PACK_IMG = {
+import { useWallet, shortAddr } from "@/lib/wallet";
+import { audio } from "@/lib/audio";
+import { rollUsdm, formatUsdm } from "@/lib/rewards";
+import {
+  PACK_KEY, PACK_PRICE_USDM, USDM_ADDRESS, PAYMENT_CONTRACT,
+  PAYMENT_ABI, ERC20_ABI, CELO_CHAIN_ID,
+} from "@/lib/contracts";
+
+// Asset maps: sealed + shredded packs, discovery images, collectible cards
+const PACK_IMG: Record<string, string> = {
   starter: "/packs/starter.png",
   mystery: "/packs/mystery.png",
   alpha: "/packs/alpha.png",
   legendary: "/packs/legendary.png",
   explorer: "/packs/explorer.png",
+};
+const SHREDDED_IMG: Record<string, string> = {
+  starter: "/packs/starter-shredded.png",
+  mystery: "/packs/mystery-shredded.png",
+  alpha: "/packs/alpha-shredded.png",
+  legendary: "/packs/legendary-shredded.png",
+  explorer: "/packs/explorer-shredded.png",
+};
+const DISCOVERY_IMG = {
+  usdm: "/discoveries/usdm-coin.png",
+  xp: "/discoveries/xp-crystal.png",
+  fact: "/discoveries/did-you-know.png",
 };
 const WORDMARK_SRC = "/shreds-wordmark.png";
 export const CARD_LIBRARY: Record<string, string> = {
@@ -34,16 +52,17 @@ export const CARD_LIBRARY: Record<string, string> = {
 export const Route = createFileRoute("/")({ component: HomeScreen });
 
 type Pack = {
-  id: string; name: string; image: string; accent: string; glow: string;
-  price: string; owners: string; shredded: string; discoveries: string;
+  id: string; name: string; image: string; shredded: string;
+  accent: string; glow: string; price: string; priceNum: number;
+  owners: string; shreddedCnt: string; discoveries: string;
 };
 
 const PACKS: Pack[] = [
-  { id: "starter", name: "Starter Pack", image: PACK_IMG.starter, accent: "oklch(0.88 0.28 135)", glow: "oklch(0.88 0.28 135 / 55%)", price: "FREE", owners: "102K+", shredded: "248K+", discoveries: "127+" },
-  { id: "mystery", name: "Mystery Pack", image: PACK_IMG.mystery, accent: "oklch(0.68 0.22 300)", glow: "oklch(0.68 0.22 300 / 55%)", price: "1.00 USDM", owners: "58K+", shredded: "142K+", discoveries: "89+" },
-  { id: "alpha", name: "Alpha Pack", image: PACK_IMG.alpha, accent: "oklch(0.82 0.17 85)", glow: "oklch(0.82 0.17 85 / 55%)", price: "2.50 USDM", owners: "24K+", shredded: "71K+", discoveries: "54+" },
-  { id: "legendary", name: "Legendary Pack", image: PACK_IMG.legendary, accent: "oklch(0.78 0.2 60)", glow: "oklch(0.78 0.2 60 / 55%)", price: "10.00 USDM", owners: "6.2K+", shredded: "18K+", discoveries: "32+" },
-  { id: "explorer", name: "Explorer Pack", image: PACK_IMG.explorer, accent: "oklch(0.85 0.18 75)", glow: "oklch(0.85 0.18 75 / 55%)", price: "25.00 USDM", owners: "812", shredded: "2.1K", discoveries: "18+" },
+  { id: "starter", name: "Starter Pack", image: PACK_IMG.starter, shredded: SHREDDED_IMG.starter, accent: "oklch(0.88 0.28 135)", glow: "oklch(0.88 0.28 135 / 55%)", price: "FREE", priceNum: 0, owners: "102K+", shreddedCnt: "248K+", discoveries: "127+" },
+  { id: "mystery", name: "Mystery Pack", image: PACK_IMG.mystery, shredded: SHREDDED_IMG.mystery, accent: "oklch(0.68 0.22 300)", glow: "oklch(0.68 0.22 300 / 55%)", price: "$0.25", priceNum: 0.25, owners: "58K+", shreddedCnt: "142K+", discoveries: "89+" },
+  { id: "alpha", name: "Alpha Pack", image: PACK_IMG.alpha, shredded: SHREDDED_IMG.alpha, accent: "oklch(0.82 0.17 85)", glow: "oklch(0.82 0.17 85 / 55%)", price: "$0.75", priceNum: 0.75, owners: "24K+", shreddedCnt: "71K+", discoveries: "54+" },
+  { id: "legendary", name: "Legendary Pack", image: PACK_IMG.legendary, shredded: SHREDDED_IMG.legendary, accent: "oklch(0.78 0.2 60)", glow: "oklch(0.78 0.2 60 / 55%)", price: "$1.50", priceNum: 1.50, owners: "6.2K+", shreddedCnt: "18K+", discoveries: "32+" },
+  { id: "explorer", name: "Explorer Pack", image: PACK_IMG.explorer, shredded: SHREDDED_IMG.explorer, accent: "oklch(0.85 0.18 75)", glow: "oklch(0.85 0.18 75 / 55%)", price: "$3.00", priceNum: 3.00, owners: "812", shreddedCnt: "2.1K", discoveries: "18+" },
 ];
 
 /* -------------------- Facts (100) -------------------- */
@@ -152,23 +171,17 @@ const FACTS: string[] = [
 
 /* -------------------- Discoveries -------------------- */
 type Discovery = {
-  kind: "USDM" | "USDT" | "XP" | "CARD" | "FACT";
+  kind: "USDM" | "XP" | "CARD" | "FACT";
   title: string; sub: string; color: string; Icon: React.ComponentType<{ className?: string }>;
   rarity?: "Common" | "Rare" | "Epic" | "Legendary";
   image?: string;
+  amountRaw?: number;
 };
 
-const STABLES: Discovery[] = [
-  { kind: "USDM", title: "0.50 USDM", sub: "Stablecoin on Celo", color: "oklch(0.75 0.2 145)", Icon: Wallet, rarity: "Common" },
-  { kind: "USDM", title: "1.00 USDM", sub: "Stablecoin on Celo", color: "oklch(0.75 0.2 145)", Icon: Wallet, rarity: "Common" },
-  { kind: "USDM", title: "2.50 USDM", sub: "Stablecoin on Celo", color: "oklch(0.75 0.2 145)", Icon: Wallet, rarity: "Rare" },
-  { kind: "USDT", title: "1.00 USDT", sub: "USDT on Celo", color: "oklch(0.72 0.16 165)", Icon: Wallet, rarity: "Common" },
-  { kind: "USDT", title: "5.00 USDT", sub: "USDT on Celo", color: "oklch(0.72 0.16 165)", Icon: Wallet, rarity: "Epic" },
-];
 const XPS: Discovery[] = [
-  { kind: "XP", title: "50 XP", sub: "Experience Points", color: "oklch(0.7 0.2 250)", Icon: Star, rarity: "Common" },
-  { kind: "XP", title: "150 XP", sub: "Experience Points", color: "oklch(0.7 0.2 250)", Icon: Star, rarity: "Rare" },
-  { kind: "XP", title: "500 XP", sub: "Experience Points", color: "oklch(0.7 0.2 250)", Icon: Star, rarity: "Epic" },
+  { kind: "XP", title: "50 XP", sub: "Experience Points", color: "oklch(0.7 0.2 250)", Icon: Star, rarity: "Common", image: DISCOVERY_IMG.xp, amountRaw: 50 },
+  { kind: "XP", title: "150 XP", sub: "Experience Points", color: "oklch(0.7 0.2 250)", Icon: Star, rarity: "Rare", image: DISCOVERY_IMG.xp, amountRaw: 150 },
+  { kind: "XP", title: "500 XP", sub: "Experience Points", color: "oklch(0.7 0.2 250)", Icon: Star, rarity: "Epic", image: DISCOVERY_IMG.xp, amountRaw: 500 },
 ];
 const CARDS: Discovery[] = [
   { kind: "CARD", title: "Neon Cube", sub: "Chance. Mystery. Reward.", color: "oklch(0.75 0.18 180)", Icon: Award, rarity: "Rare", image: CARD_LIBRARY["neon-cube"] },
@@ -186,13 +199,23 @@ const CARDS: Discovery[] = [
 
 function pickRandom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
 
-function buildDiscoveries(): Discovery[] {
-  // Guarantee: at least 1 stable, 1 fact. Optionally XP or a card.
+function buildDiscoveries(packId: string): Discovery[] {
   const items: Discovery[] = [];
-  items.push(pickRandom(STABLES));
-  if (Math.random() > 0.4) items.push(pickRandom(XPS));
-  if (Math.random() > 0.55) items.push(pickRandom(CARDS));
-  // Always include a fact discovery
+  // USDM roll (weighted by pack tier)
+  const usdm = rollUsdm(packId);
+  items.push({
+    kind: "USDM",
+    title: `${formatUsdm(usdm)} USDM`,
+    sub: "Stablecoin on Celo",
+    color: "oklch(0.75 0.2 145)",
+    Icon: Wallet,
+    rarity: usdm >= (Number(PACK_PRICE_USDM[packId]) || 0.05) * 2 ? "Legendary" : usdm >= (Number(PACK_PRICE_USDM[packId]) || 0.01) ? "Rare" : "Common",
+    image: DISCOVERY_IMG.usdm,
+    amountRaw: usdm,
+  });
+  if (Math.random() > 0.4) items.push({ ...pickRandom(XPS) });
+  if (Math.random() > 0.55) items.push({ ...pickRandom(CARDS) });
+  // Fact
   const fact = FACTS[Math.floor(Math.random() * FACTS.length)];
   items.push({
     kind: "FACT",
@@ -201,6 +224,7 @@ function buildDiscoveries(): Discovery[] {
     color: "oklch(0.7 0.22 300)",
     Icon: Lightbulb,
     rarity: "Common",
+    image: DISCOVERY_IMG.fact,
   });
   return items;
 }
@@ -210,7 +234,7 @@ const LIVE_EVENTS = [
   { user: "David", text: "unlocked", accent: "a Rare Card", from: "Alpha Pack" },
   { user: "Sarah", text: "found", accent: "a MiniPay Fact", from: "Starter Pack" },
   { user: "Michael", text: "completed", accent: "a Collection", from: "Legendary Pack" },
-  { user: "Lin", text: "discovered", accent: "5.00 USDT", from: "Explorer Pack" },
+  { user: "Lin", text: "discovered", accent: "5.00 USDM", from: "Explorer Pack" },
   { user: "Kwame", text: "unlocked", accent: "a Legendary Card", from: "Legendary Pack" },
 ];
 
@@ -223,50 +247,51 @@ const AVATAR_GRADIENTS = [
   "linear-gradient(135deg,#34d399,#0d9488)",
 ];
 
-/* -------------------- Wallet (MiniPay) -------------------- */
-function useMiniPayWallet() {
-  const [address, setAddress] = useState<string | null>(null);
-  const [status, setStatus] = useState<"idle" | "connecting" | "connected" | "unavailable">("idle");
-  const [isMiniPay, setIsMiniPay] = useState(false);
-
-  const connect = useCallback(async () => {
-    setStatus("connecting");
-    try {
-      const eth = (typeof window !== "undefined" ? (window as any).ethereum : null);
-      if (!eth) { setStatus("unavailable"); return; }
-      if (eth.isMiniPay) {
-        setIsMiniPay(true);
-        const accounts: string[] = await eth.request({ method: "eth_accounts" });
-        if (accounts?.[0]) { setAddress(accounts[0]); setStatus("connected"); return; }
-      }
-      const accounts: string[] = await eth.request({ method: "eth_requestAccounts" });
-      if (accounts?.[0]) { setAddress(accounts[0]); setStatus("connected"); }
-      else setStatus("unavailable");
-    } catch { setStatus("unavailable"); }
-  }, []);
-
-  useEffect(() => { connect(); }, [connect]);
-
-  return { address, status, isMiniPay, connect };
-}
-
-function shortAddr(a: string | null) {
-  if (!a) return "";
-  return a.slice(0, 6) + "…" + a.slice(-4);
+/* -------------------- Purchase helper -------------------- */
+async function buyPackOnChain(packId: string, walletAddress: string, getEth: () => unknown) {
+  const eth = getEth() as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> } | null;
+  if (!eth) throw new Error("No wallet");
+  const { createWalletClient, custom, parseUnits, keccak256, encodePacked } = await import("viem");
+  const { celo } = await import("viem/chains");
+  const client = createWalletClient({
+    account: walletAddress as `0x${string}`,
+    chain: celo,
+    transport: custom(eth),
+  });
+  const price = parseUnits(PACK_PRICE_USDM[packId], 18);
+  const orderId = keccak256(encodePacked(["address", "string", "uint256"], [walletAddress as `0x${string}`, packId, BigInt(Date.now())]));
+  // Approve USDM
+  await client.writeContract({
+    address: USDM_ADDRESS as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: "approve",
+    args: [PAYMENT_CONTRACT as `0x${string}`, price],
+  });
+  // Buy pack
+  const tx = await client.writeContract({
+    address: PAYMENT_CONTRACT as `0x${string}`,
+    abi: PAYMENT_ABI,
+    functionName: "buyWithToken",
+    args: [PACK_KEY[packId]!, USDM_ADDRESS as `0x${string}`, orderId],
+  });
+  return tx;
 }
 
 /* -------------------- Home Screen -------------------- */
 
 function HomeScreen() {
   const [index, setIndex] = useState(0);
-  const [phase, setPhase] = useState<"idle" | "slashing" | "opening" | "revealing">("idle");
+  const [phase, setPhase] = useState<"idle" | "slashing" | "shredded" | "revealing">("idle");
   const [reveals, setReveals] = useState<Discovery[]>([]);
   const [collection, setCollection] = useState<Discovery[]>([]);
   const [tickerIdx, setTickerIdx] = useState(0);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const wallet = useMiniPayWallet();
+  const [purchased, setPurchased] = useState<Set<string>>(new Set(["starter"]));
+  const [buying, setBuying] = useState(false);
+  const [buyError, setBuyError] = useState<string | null>(null);
+  const wallet = useWallet();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -288,21 +313,50 @@ function HomeScreen() {
   const goPrev = () => setIndex((i) => (i - 1 + PACKS.length) % PACKS.length);
   const goNext = () => setIndex((i) => (i + 1) % PACKS.length);
 
-  const runShred = useCallback(() => {
+  const executeShred = useCallback(() => {
     if (phase !== "idle") return;
-    const items = buildDiscoveries();
+    const items = buildDiscoveries(pack.id);
     setReveals(items);
+    audio.duckTheme();
+    audio.playShred();
     setPhase("slashing");
-    // Slash claw visible for 700ms
-    setTimeout(() => setPhase("opening"), 700);
-    // Pack tears for 800ms
+    // After 700ms, show the shredded pack
+    setTimeout(() => setPhase("shredded"), 700);
+    // After the shred sound (~1s), reveal discoveries
     setTimeout(() => {
       setPhase("revealing");
       setCollection((c) => [...items, ...c].slice(0, 60));
-    }, 1550);
-  }, [phase]);
+    }, 1700);
+  }, [phase, pack.id]);
 
-  const closeReveal = () => { setPhase("idle"); setReveals([]); };
+  const startShred = useCallback(async () => {
+    // If paid and not yet purchased, buy first
+    if (pack.priceNum > 0 && !purchased.has(pack.id)) {
+      if (!wallet.address) {
+        // prompt wallet connect
+        await wallet.connect();
+        return;
+      }
+      if (wallet.chainId !== CELO_CHAIN_ID) {
+        setBuyError("Please switch to Celo network.");
+        return;
+      }
+      setBuying(true); setBuyError(null);
+      try {
+        await buyPackOnChain(pack.id, wallet.address, wallet.getEth);
+        setPurchased((s) => new Set([...s, pack.id]));
+        setBuying(false);
+        executeShred();
+      } catch (e: unknown) {
+        setBuying(false);
+        setBuyError((e as Error)?.message?.slice(0, 80) || "Purchase failed.");
+      }
+      return;
+    }
+    executeShred();
+  }, [pack, purchased, wallet, executeShred]);
+
+  const closeReveal = () => { setPhase("idle"); setReveals([]); audio.restoreTheme(); };
 
   return (
     <div className="min-h-dvh w-full text-foreground pb-20">
@@ -324,9 +378,9 @@ function HomeScreen() {
             <img
               src={WORDMARK_SRC}
               alt="Shreds"
-              className="h-20 w-auto max-w-full object-contain drop-shadow-[0_0_28px_oklch(0.88_0.28_135/0.6)]"
+              className="h-16 w-auto max-w-full object-contain drop-shadow-[0_0_28px_oklch(0.88_0.28_135/0.6)]"
             />
-            <div className="mt-0.5 text-[8px] font-bold tracking-[0.22em] whitespace-nowrap">
+            <div className="mt-0.5 text-[7px] font-bold tracking-[0.18em] whitespace-nowrap">
               <span className="text-foreground">DISCOVER. </span>
               <span className="text-shred">COLLECT. </span>
               <span className="text-[color:var(--gold)]">EARN.</span>
@@ -347,7 +401,7 @@ function HomeScreen() {
           </button>
         </header>
 
-        {/* Stats row - single horizontal row */}
+        {/* Stats row */}
         <div className="mt-2 stat-card rounded-lg px-1.5 py-1 grid grid-cols-4 gap-0.5">
           <StatCompact icon={<Users className="w-3 h-3 text-shred" />} value="184K+" label="SHREDDERS" />
           <StatCompact icon={<Package className="w-3 h-3 text-[color:oklch(0.7_0.18_240)]" />} value="2.8M+" label="SHREDDED" />
@@ -360,20 +414,22 @@ function HomeScreen() {
           index={index}
           onPrev={goPrev}
           onNext={goNext}
-          onShred={runShred}
+          onShred={startShred}
           phase={phase}
+          buying={buying}
+          needsPurchase={pack.priceNum > 0 && !purchased.has(pack.id)}
         />
 
-        {/* Pack details - single row */}
+        {/* Pack details */}
         <div className="mt-2 grid grid-cols-4 gap-1">
           <MiniStat Icon={Star} value={pack.price} label="PRICE" tint="oklch(0.88 0.28 135)" />
           <MiniStat Icon={Users} value={pack.owners} label="OWNERS" tint="oklch(0.7 0.2 145)" />
-          <MiniStat Icon={Flame} value={pack.shredded} label="SHRED" tint="oklch(0.75 0.2 45)" />
+          <MiniStat Icon={Flame} value={pack.shreddedCnt} label="SHRED" tint="oklch(0.75 0.2 45)" />
           <MiniStat Icon={Gift} value={pack.discoveries} label="DROPS" tint="oklch(0.68 0.22 300)" />
         </div>
 
         {/* Dots */}
-        <div className="mt-4 flex items-center justify-center gap-2">
+        <div className="mt-3 flex items-center justify-center gap-2">
           {PACKS.map((p, i) => (
             <button
               key={p.id}
@@ -390,17 +446,21 @@ function HomeScreen() {
         </div>
 
         {/* Hint */}
-        <div className="mt-4 text-center">
-          <div className="font-display text-2xl text-shred text-glow-shred">SLASH ACROSS TO SHRED</div>
-          <div className="text-[10px] tracking-[0.25em] font-semibold text-muted-foreground mt-1">
-            REVEAL YOUR DISCOVERIES
-          </div>
+        <div className="mt-2 text-center">
+          <div className="font-display text-lg text-shred text-glow-shred leading-none">SLASH TO SHRED</div>
+          <div className="text-[8px] tracking-[0.2em] font-semibold text-muted-foreground mt-0.5">REVEAL YOUR DISCOVERIES</div>
         </div>
+
+        {buyError && (
+          <div className="mt-2 text-center text-[10px] text-destructive flex items-center justify-center gap-1">
+            <AlertTriangle className="w-3 h-3" /> {buyError}
+          </div>
+        )}
 
         {/* Wallet chip */}
         <div className="mt-3 flex justify-center">
           <button
-            onClick={wallet.status === "connected" ? undefined : wallet.connect}
+            onClick={wallet.status === "connected" ? undefined : () => { void wallet.connect(); }}
             className="stat-card rounded-full px-3 py-1.5 text-[11px] font-semibold flex items-center gap-2 active:scale-95 transition"
           >
             <span className={`w-1.5 h-1.5 rounded-full ${wallet.status === "connected" ? "bg-shred" : "bg-muted-foreground"} animate-pulse`} />
@@ -428,18 +488,6 @@ function HomeScreen() {
 
 /* -------------------- Small pieces -------------------- */
 
-function Stat({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
-  return (
-    <div className="stat-card rounded-xl px-3 py-2.5 flex items-center gap-2 min-w-0">
-      <div className="shrink-0">{icon}</div>
-      <div className="min-w-0">
-        <div className="font-bold text-sm leading-none truncate">{value}</div>
-        <div className="text-[9px] font-bold tracking-widest text-muted-foreground mt-1 leading-tight truncate">{label}</div>
-      </div>
-    </div>
-  );
-}
-
 function StatCompact({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
   return (
     <div className="flex flex-col items-center justify-center text-center min-w-0 px-0.5 py-0.5">
@@ -465,9 +513,10 @@ function MiniStat({ Icon, value, label, tint }: { Icon: React.ComponentType<{ cl
 /* -------------------- Pack Carousel -------------------- */
 
 function PackCarousel({
-  index, onPrev, onNext, onShred, phase,
+  index, onPrev, onNext, onShred, phase, buying, needsPurchase,
 }: {
-  index: number; onPrev: () => void; onNext: () => void; onShred: () => void; phase: "idle" | "slashing" | "opening" | "revealing";
+  index: number; onPrev: () => void; onNext: () => void; onShred: () => void;
+  phase: "idle" | "slashing" | "shredded" | "revealing"; buying: boolean; needsPurchase: boolean;
 }) {
   const start = useRef<{ x: number; y: number; t: number } | null>(null);
   const [slash, setSlash] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
@@ -488,9 +537,8 @@ function PackCarousel({
     const dt = Date.now() - s.t;
     const absX = Math.abs(dx), absY = Math.abs(dy);
     start.current = null;
-    if (phase !== "idle") return;
+    if (phase !== "idle" || buying) return;
     const dist = Math.hypot(dx, dy);
-    // slash: fast diagonal / long swipe with some vertical component
     if (dist > 90 && dt < 700 && absY > 20 && absX > 40 && absX / absY < 4) {
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
@@ -508,6 +556,9 @@ function PackCarousel({
     if (absX > absY && absX > 50) { dx < 0 ? onNext() : onPrev(); }
   }
 
+  const showShredded = phase === "shredded" || phase === "revealing";
+  const imgSrc = showShredded ? pack.shredded : pack.image;
+
   return (
     <div
       ref={containerRef}
@@ -524,9 +575,11 @@ function PackCarousel({
             className="absolute inset-0 rounded-[40%] blur-3xl opacity-70"
             style={{ background: `radial-gradient(ellipse at center, ${pack.glow}, transparent 60%)` }}
           />
-          <PackImage
-            pack={pack}
-            className={`relative h-full w-auto drop-shadow-[0_20px_40px_rgba(0,0,0,0.6)] ${phase === "opening" || phase === "revealing" ? "pack-tearing" : ""}`}
+          <img
+            src={imgSrc}
+            alt={pack.name}
+            draggable={false}
+            className={`relative h-full w-auto drop-shadow-[0_20px_40px_rgba(0,0,0,0.6)] transition-transform duration-300 ${phase === "slashing" ? "scale-110" : ""}`}
           />
           {slash && (
             <svg className="claw absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 ${containerRef.current?.clientWidth ?? 300} ${containerRef.current?.clientHeight ?? 440}`}>
@@ -547,6 +600,16 @@ function PackCarousel({
                 );
               })}
             </svg>
+          )}
+          {buying && (
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+              <div className="font-display text-xl text-white animate-pulse">Purchasing…</div>
+            </div>
+          )}
+          {needsPurchase && !buying && phase === "idle" && (
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-shred text-primary-foreground font-bold text-[10px] tracking-wider px-3 py-1 rounded-full shadow-lg">
+              BUY & SHRED
+            </div>
           )}
         </div>
       </div>
@@ -583,15 +646,18 @@ const RARITY_COLOR: Record<string, string> = {
 };
 
 function RevealOverlay({ phase, reveals, pack, onClose }: {
-  phase: "slashing" | "opening" | "revealing" | "idle"; reveals: Discovery[]; pack: Pack; onClose: () => void;
+  phase: "slashing" | "shredded" | "revealing" | "idle"; reveals: Discovery[]; pack: Pack; onClose: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-40 bg-background/85 backdrop-blur-md flex flex-col items-center justify-center px-4 overflow-y-auto py-8">
       {phase === "slashing" && (
         <div className="font-display text-4xl text-shred text-glow-shred animate-pulse">SLASHING…</div>
       )}
-      {phase === "opening" && (
-        <div className="font-display text-4xl text-shred text-glow-shred">TEARING OPEN…</div>
+      {phase === "shredded" && (
+        <div className="flex flex-col items-center gap-4">
+          <img src={pack.shredded} alt={pack.name + " shredded"} className="h-[45vh] object-contain drop-shadow-2xl" />
+          <div className="font-display text-2xl text-shred text-glow-shred">SHREDDED!</div>
+        </div>
       )}
       {phase === "revealing" && (
         <div className="w-full max-w-md">
@@ -619,7 +685,7 @@ function RevealOverlay({ phase, reveals, pack, onClose }: {
                   }}
                 >
                   {d.image ? (
-                    <img src={d.image} alt={d.title} className="w-full h-full object-cover" />
+                    <img src={d.image} alt={d.title} className="w-full h-full object-contain" />
                   ) : (
                     <d.Icon className="w-7 h-7" />
                   )}
@@ -726,7 +792,7 @@ function LeaderboardSheet({ onClose }: { onClose: () => void }) {
 function ProfileSheet({ onClose, wallet, collection }: { onClose: () => void; wallet: string | null; collection: Discovery[] }) {
   const cards = collection.filter(c => c.kind === "CARD");
   const facts = collection.filter(c => c.kind === "FACT");
-  const stables = collection.filter(c => c.kind === "USDM" || c.kind === "USDT");
+  const stables = collection.filter(c => c.kind === "USDM");
   const [tab, setTab] = useState<"CARDS" | "FACTS" | "REWARDS">("CARDS");
 
   return (
@@ -800,7 +866,7 @@ function ProfileSheet({ onClose, wallet, collection }: { onClose: () => void; wa
           <div className="space-y-2">
             {facts.map((f, i) => (
               <div key={i} className="stat-card rounded-xl p-3 flex gap-3">
-                <Lightbulb className="w-5 h-5 text-[color:var(--royal)] shrink-0 mt-0.5" />
+                <img src={DISCOVERY_IMG.fact} alt="" className="w-10 h-10 object-contain shrink-0" />
                 <div className="text-xs leading-snug">{f.sub}</div>
               </div>
             ))}
@@ -810,12 +876,12 @@ function ProfileSheet({ onClose, wallet, collection }: { onClose: () => void; wa
 
       {tab === "REWARDS" && (
         stables.length === 0 ? (
-          <EmptyState text="No stablecoin rewards yet. Shred a pack to earn USDM or USDT." />
+          <EmptyState text="No stablecoin rewards yet. Shred a pack to earn USDM." />
         ) : (
           <div className="space-y-2">
             {stables.map((s, i) => (
               <div key={i} className="stat-card rounded-xl p-3 flex items-center gap-3">
-                <Wallet className="w-5 h-5 text-shred shrink-0" />
+                <img src={DISCOVERY_IMG.usdm} alt="" className="w-10 h-10 object-contain shrink-0" />
                 <div className="flex-1 font-bold">{s.title}</div>
                 <div className="text-[10px] text-muted-foreground tracking-widest">{s.sub}</div>
               </div>
@@ -884,7 +950,7 @@ function OnboardingOverlay({ onDone }: { onDone: () => void }) {
     {
       Icon: Gift,
       title: "DISCOVER & COLLECT",
-      body: "Every pack drops stablecoins on Celo (USDM / USDT), XP, collectible cards, and a fact from the MiniPay ecosystem.",
+      body: "Every pack drops USDM on Celo, XP, collectible cards, and a fact from the MiniPay ecosystem.",
     },
     {
       Icon: Wallet,
