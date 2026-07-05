@@ -14,13 +14,153 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      discoveries: {
+        Row: {
+          amount: number | null
+          created_at: string
+          id: string
+          kind: string
+          pack_id: string
+          rarity: string
+          sub: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          id?: string
+          kind: string
+          pack_id: string
+          rarity?: string
+          sub: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          id?: string
+          kind?: string
+          pack_id?: string
+          rarity?: string
+          sub?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      pack_purchases: {
+        Row: {
+          created_at: string
+          id: string
+          order_id: string
+          pack_id: string
+          price_usdm: number
+          tx_hash: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          order_id: string
+          pack_id: string
+          price_usdm: number
+          tx_hash?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          order_id?: string
+          pack_id?: string
+          price_usdm?: number
+          tx_hash?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          id: string
+          level: number
+          packs_shredded: number
+          updated_at: string
+          username: string | null
+          wallet: string | null
+          xp: number
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          level?: number
+          packs_shredded?: number
+          updated_at?: string
+          username?: string | null
+          wallet?: string | null
+          xp?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          level?: number
+          packs_shredded?: number
+          updated_at?: string
+          username?: string | null
+          wallet?: string | null
+          xp?: number
+        }
+        Relationships: []
+      }
+      reward_auth: {
+        Row: {
+          amount_usdm: number
+          created_at: string
+          id: string
+          nonce: string
+          pack_id: string
+          user_id: string
+          wallet: string
+        }
+        Insert: {
+          amount_usdm: number
+          created_at?: string
+          id?: string
+          nonce: string
+          pack_id: string
+          user_id: string
+          wallet: string
+        }
+        Update: {
+          amount_usdm?: number
+          created_at?: string
+          id?: string
+          nonce?: string
+          pack_id?: string
+          user_id?: string
+          wallet?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
-      [_ in never]: never
+      leaderboard_view: {
+        Row: {
+          packs_shredded: number | null
+          range: string | null
+          username: string | null
+          wallet: string | null
+          xp: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      increment_shred_stats: {
+        Args: { _pack: string; _user: string; _xp: number }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
