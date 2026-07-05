@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Trophy, User, Users, Package, Gem, Wallet, Flame, Gift, Star,
-  Sparkles, Lightbulb, X, ChevronLeft, ChevronRight, Award, Zap,
+  Lightbulb, X, ChevronLeft, ChevronRight, Award, Zap,
   ArrowRight, Hand, Swords, AlertTriangle,
 } from "lucide-react";
 import { BackgroundMusic } from "@/components/BackgroundMusic";
@@ -251,7 +251,7 @@ const AVATAR_GRADIENTS = [
 async function buyPackOnChain(packId: string, walletAddress: string, getEth: () => unknown) {
   const eth = getEth() as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> } | null;
   if (!eth) throw new Error("No wallet");
-  const { createWalletClient, custom, parseUnits, keccak256, encodePacked, concat, toHex, hexToBytes } = await import("viem");
+  const { createWalletClient, custom, parseUnits, keccak256, encodePacked } = await import("viem");
   const { celo } = await import("viem/chains");
   const client = createWalletClient({
     account: walletAddress as `0x${string}`,
