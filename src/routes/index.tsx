@@ -460,7 +460,7 @@ function HomeScreen() {
         {/* Wallet chip */}
         <div className="mt-3 flex justify-center">
           <button
-            onClick={wallet.status === "connected" ? undefined : wallet.connect}
+            onClick={wallet.status === "connected" ? undefined : () => { void wallet.connect(); }}
             className="stat-card rounded-full px-3 py-1.5 text-[11px] font-semibold flex items-center gap-2 active:scale-95 transition"
           >
             <span className={`w-1.5 h-1.5 rounded-full ${wallet.status === "connected" ? "bg-shred" : "bg-muted-foreground"} animate-pulse`} />
