@@ -6,7 +6,7 @@ export const CELO_CHAIN_HEX = "0xa4ec";
 export const USDM_ADDRESS =
   (import.meta as unknown as { env?: Record<string, string> }).env
     ?.VITE_USDM_ADDRESS ||
-  "0xcfffe0c89a779c09df3df5624f54cdf7ef5fdd5d"; // Mento USDM — verify before mainnet use
+  "0x765de816845861e75a25fca122bb6898b8b1282a"; // Official USDM stablecoin on Celo
 
 export const PAYMENT_CONTRACT = "0xf01d7d3a57af16c47bc330c48c5e201cebbf054e";
 export const REWARDS_CONTRACT = "0x16dd07bd11524de1d904cde7dfd326c7772c8608";
