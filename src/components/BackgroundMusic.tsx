@@ -1,19 +1,18 @@
 import { useEffect, useState } from "react";
-import { Volume2, VolumeX } from "lucide-react";
+import { Music, Pause } from "lucide-react";
 import { audio } from "@/lib/audio";
 
 /**
- * Renders the mute toggle and boots the Shreds theme song on first user
- * interaction (browsers block autoplay until then). The audio file lives in
- * /public/audio so it plays inside the deployed MiniPay app, not just preview.
+ * Boots the Shreds theme song on app open. Renders a small header button
+ * (icon-only when `bare`) that toggles play/pause and can restart the track
+ * after it naturally ends.
  */
-export function BackgroundMusic() {
-  const [muted, setMuted] = useState(false);
+export function BackgroundMusic({ bare = false }: { bare?: boolean }) {
+  const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     audio.init();
-    setMuted(audio.isMuted());
-    // Try to start immediately; if blocked, wait for first gesture.
+    const unsub = audio.subscribe((s) => setPlaying(s.playing));
     void audio.startTheme();
     const kick = () => { void audio.startTheme(); cleanup(); };
     const cleanup = () => {
@@ -24,24 +23,24 @@ export function BackgroundMusic() {
     window.addEventListener("pointerdown", kick, { once: true });
     window.addEventListener("keydown", kick, { once: true });
     window.addEventListener("touchstart", kick, { once: true });
-    return cleanup;
+    return () => { unsub(); cleanup(); };
   }, []);
 
-  const toggle = () => {
-    const next = !muted;
-    setMuted(next);
-    audio.setMuted(next);
-  };
+  const toggle = () => { void audio.toggleTheme(); };
 
-  return (
-    <button
-      onClick={toggle}
-      aria-label={muted ? "Unmute theme music" : "Mute theme music"}
-      className="fixed bottom-12 right-2 z-40 icon-tile w-9 h-9 rounded-full flex items-center justify-center active:scale-95 shadow-lg"
-    >
-      {muted
-        ? <VolumeX className="w-3.5 h-3.5 text-muted-foreground" />
-        : <Volume2 className="w-3.5 h-3.5 text-shred" />}
-    </button>
-  );
+  if (bare) {
+    return (
+      <button
+        onClick={toggle}
+        aria-label={playing ? "Pause theme song" : "Play theme song"}
+        className="icon-tile w-9 h-9 rounded-lg flex items-center justify-center active:scale-95 transition"
+      >
+        {playing
+          ? <Pause className="w-4 h-4 text-shred" />
+          : <Music className="w-4 h-4 text-shred" />}
+      </button>
+    );
+  }
+
+  return null;
 }

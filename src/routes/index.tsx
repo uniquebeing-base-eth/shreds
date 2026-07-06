@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Trophy, User, Users, Package, Gem, Wallet, Flame, Gift, Star,
   Lightbulb, X, ChevronLeft, ChevronRight, Award, Zap,
-  ArrowRight, Hand, Swords, AlertTriangle,
+  ArrowRight, AlertTriangle, Check, Loader2,
 } from "lucide-react";
 import { BackgroundMusic } from "@/components/BackgroundMusic";
 import { useWallet, shortAddr } from "@/lib/wallet";
@@ -12,7 +12,12 @@ import { rollUsdm, formatUsdm } from "@/lib/rewards";
 import {
   PACK_KEY, PACK_PRICE_USDM, USDM_ADDRESS, PAYMENT_CONTRACT,
   PAYMENT_ABI, ERC20_ABI, CELO_CHAIN_ID,
+  USERNAME_CONTRACT, USERNAME_ABI,
 } from "@/lib/contracts";
+import onboarding1 from "@/assets/onboarding/onboarding-1.png.asset.json";
+import onboarding2 from "@/assets/onboarding/onboarding-2.png.asset.json";
+import onboarding3 from "@/assets/onboarding/onboarding-3.png.asset.json";
+import onboarding4 from "@/assets/onboarding/onboarding-4.png.asset.json";
 
 // Asset maps: sealed + shredded packs, discovery images, collectible cards
 const PACK_IMG: Record<string, string> = {
@@ -291,16 +296,28 @@ function HomeScreen() {
   const [purchased, setPurchased] = useState<Set<string>>(new Set(["starter"]));
   const [buying, setBuying] = useState(false);
   const [buyError, setBuyError] = useState<string | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
+  const [showUsernameModal, setShowUsernameModal] = useState(false);
   const wallet = useWallet();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!localStorage.getItem("shreds_onboarded")) setShowOnboarding(true);
+    const u = localStorage.getItem("shreds_username");
+    if (u) setUsername(u);
   }, []);
 
   const finishOnboarding = () => {
-    try { localStorage.setItem("shreds_onboarded", "1"); } catch {}
+    try { localStorage.setItem("shreds_onboarded", "1"); } catch { /* noop */ }
     setShowOnboarding(false);
+  };
+
+  const onUsernameRegistered = (name: string) => {
+    try { localStorage.setItem("shreds_username", name); } catch { /* noop */ }
+    setUsername(name);
+    setShowUsernameModal(false);
+    // continue to shredding flow
+    setTimeout(() => { void startShredInner(); }, 200);
   };
 
   const pack = PACKS[index];
@@ -329,11 +346,10 @@ function HomeScreen() {
     }, 1700);
   }, [phase, pack.id]);
 
-  const startShred = useCallback(async () => {
+  const startShredInner = useCallback(async () => {
     // If paid and not yet purchased, buy first
     if (pack.priceNum > 0 && !purchased.has(pack.id)) {
       if (!wallet.address) {
-        // prompt wallet connect
         await wallet.connect();
         return;
       }
@@ -356,13 +372,26 @@ function HomeScreen() {
     executeShred();
   }, [pack, purchased, wallet, executeShred]);
 
+  const startShred = useCallback(async () => {
+    // First-time shredders must register a username before the flow continues.
+    if (!username) {
+      if (!wallet.address) {
+        await wallet.connect();
+      }
+      setShowUsernameModal(true);
+      return;
+    }
+    await startShredInner();
+  }, [username, wallet, startShredInner]);
+
+
   const closeReveal = () => { setPhase("idle"); setReveals([]); audio.restoreTheme(); };
 
   return (
     <div className="min-h-dvh w-full text-foreground pb-20">
       <div className="mx-auto w-full max-w-md px-3 pt-3">
         {/* Header */}
-        <header className="grid grid-cols-[40px_1fr_40px] items-center gap-2">
+        <header className="grid grid-cols-[40px_1fr_88px] items-center gap-2">
           <button
             onClick={() => setShowLeaderboard(true)}
             className="flex flex-col items-center gap-0.5 group"
@@ -387,18 +416,24 @@ function HomeScreen() {
             </div>
           </div>
 
-          <button
-            onClick={() => setShowProfile(true)}
-            className="flex flex-col items-center gap-0.5 group"
-            aria-label="Profile"
-          >
-            <div className="icon-tile w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden group-active:scale-95 transition">
-              <div className="w-full h-full flex items-center justify-center" style={{ background: AVATAR_GRADIENTS[0] }}>
-                <User className="w-4 h-4 text-white" />
-              </div>
+          <div className="flex items-center justify-end gap-1.5">
+            <div className="flex flex-col items-center gap-0.5">
+              <BackgroundMusic bare />
+              <span className="text-[7px] font-semibold tracking-[0.16em] text-muted-foreground">MUSIC</span>
             </div>
-            <span className="text-[7px] font-semibold tracking-[0.16em] text-muted-foreground">PROFILE</span>
-          </button>
+            <button
+              onClick={() => setShowProfile(true)}
+              className="flex flex-col items-center gap-0.5 group"
+              aria-label="Profile"
+            >
+              <div className="icon-tile w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden group-active:scale-95 transition">
+                <div className="w-full h-full flex items-center justify-center" style={{ background: AVATAR_GRADIENTS[0] }}>
+                  <User className="w-4 h-4 text-white" />
+                </div>
+              </div>
+              <span className="text-[7px] font-semibold tracking-[0.16em] text-muted-foreground">PROFILE</span>
+            </button>
+          </div>
         </header>
 
         {/* Stats row */}
@@ -479,9 +514,26 @@ function HomeScreen() {
       )}
 
       {showLeaderboard && <LeaderboardSheet onClose={() => setShowLeaderboard(false)} />}
-      {showProfile && <ProfileSheet onClose={() => setShowProfile(false)} wallet={wallet.address} collection={collection} />}
+      {showProfile && (
+        <ProfileSheet
+          onClose={() => setShowProfile(false)}
+          wallet={wallet.address}
+          collection={collection}
+          username={username}
+          onRegister={() => { setShowProfile(false); setShowUsernameModal(true); }}
+        />
+      )}
       {showOnboarding && <OnboardingOverlay onDone={finishOnboarding} />}
-      <BackgroundMusic />
+      {showUsernameModal && (
+        <UsernameModal
+          walletAddress={wallet.address}
+          onConnect={() => wallet.connect()}
+          onClose={() => setShowUsernameModal(false)}
+          onRegistered={onUsernameRegistered}
+          getEth={wallet.getEth}
+        />
+      )}
+      
     </div>
   );
 }
@@ -789,7 +841,10 @@ function LeaderboardSheet({ onClose }: { onClose: () => void }) {
 
 /* -------------------- Profile -------------------- */
 
-function ProfileSheet({ onClose, wallet, collection }: { onClose: () => void; wallet: string | null; collection: Discovery[] }) {
+function ProfileSheet({ onClose, wallet, collection, username, onRegister }: {
+  onClose: () => void; wallet: string | null; collection: Discovery[];
+  username: string | null; onRegister: () => void;
+}) {
   const cards = collection.filter(c => c.kind === "CARD");
   const facts = collection.filter(c => c.kind === "FACT");
   const stables = collection.filter(c => c.kind === "USDM");
@@ -800,7 +855,7 @@ function ProfileSheet({ onClose, wallet, collection }: { onClose: () => void; wa
       <div className="stat-card rounded-2xl p-4 flex items-center gap-3">
         <div className="w-14 h-14 rounded-2xl shrink-0" style={{ background: AVATAR_GRADIENTS[0] }} />
         <div className="flex-1 min-w-0">
-          <div className="font-display text-xl truncate">SHREDDER_01</div>
+          <div className="font-display text-xl truncate">{username ? username.toUpperCase() : "UNCLAIMED"}</div>
           <div className="text-[11px] text-muted-foreground truncate">{wallet ? shortAddr(wallet) : "Wallet not connected"}</div>
           <div className="mt-2 flex items-center gap-2">
             <div className="px-2 py-0.5 rounded-full bg-shred/15 text-shred text-[10px] font-bold tracking-wider">LVL 7</div>
@@ -811,6 +866,15 @@ function ProfileSheet({ onClose, wallet, collection }: { onClose: () => void; wa
           </div>
         </div>
       </div>
+
+      {!username && (
+        <button
+          onClick={onRegister}
+          className="mt-3 w-full py-3 rounded-2xl bg-shred text-primary-foreground font-bold text-xs tracking-widest glow-shred active:scale-[0.98] flex items-center justify-center gap-2"
+        >
+          <Award className="w-4 h-4" /> REGISTER YOUR USERNAME
+        </button>
+      )}
 
       <div className="grid grid-cols-3 gap-2 mt-4">
         <ProfileStat label="PACKS" value={String(collection.length ? Math.ceil(collection.length / 3) : 0)} />
@@ -932,64 +996,49 @@ function Sheet({ title, onClose, children, Icon }: { title: string; onClose: () 
   );
 }
 
-/* -------------------- Onboarding -------------------- */
+/* -------------------- Onboarding (uploaded image slides) -------------------- */
+
+const ONBOARDING_SLIDES = [onboarding1.url, onboarding2.url, onboarding3.url, onboarding4.url];
 
 function OnboardingOverlay({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState(0);
-  const steps = [
-    {
-      Icon: Hand,
-      title: "SWIPE TO EXPLORE",
-      body: "Swipe left or right on the pack to browse Starter, Mystery, Alpha, Legendary and Explorer packs.",
-    },
-    {
-      Icon: Swords,
-      title: "SLASH TO SHRED",
-      body: "Drag quickly across the pack — like a claw slash — to tear it open and reveal what's inside.",
-    },
-    {
-      Icon: Gift,
-      title: "DISCOVER & COLLECT",
-      body: "Every pack drops USDM on Celo, XP, collectible cards, and a fact from the MiniPay ecosystem.",
-    },
-    {
-      Icon: Wallet,
-      title: "AUTO-CONNECTED",
-      body: "Open Shreds inside MiniPay and your wallet connects automatically — no setup needed.",
-    },
-  ];
-  const s = steps[step];
-  const last = step === steps.length - 1;
+  const startRef = useRef<{ x: number; t: number } | null>(null);
+  const last = step === ONBOARDING_SLIDES.length - 1;
+
+  const onDown = (e: React.PointerEvent) => { startRef.current = { x: e.clientX, t: Date.now() }; };
+  const onUp = (e: React.PointerEvent) => {
+    if (!startRef.current) return;
+    const dx = e.clientX - startRef.current.x;
+    startRef.current = null;
+    if (Math.abs(dx) > 40) {
+      if (dx < 0 && !last) setStep(step + 1);
+      if (dx > 0 && step > 0) setStep(step - 1);
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-[60] bg-background/95 backdrop-blur-md flex items-center justify-center px-4">
-      <div className="w-full max-w-sm rounded-3xl bg-card border border-border p-6 reveal-pop text-center">
-        <div className="w-16 h-16 mx-auto rounded-2xl icon-tile flex items-center justify-center mb-4 glow-shred">
-          <s.Icon className="w-8 h-8 text-shred" />
-        </div>
-        <div className="font-display text-3xl text-shred text-glow-shred">{s.title}</div>
-        <p className="text-sm text-muted-foreground mt-3 leading-relaxed">{s.body}</p>
-
-        <div className="mt-5 flex items-center justify-center gap-1.5">
-          {steps.map((_, i) => (
-            <span key={i} className="h-1.5 rounded-full transition-all"
-              style={{
-                width: i === step ? 22 : 8,
-                background: i === step ? "var(--shred)" : "oklch(0.35 0.02 150)",
-              }} />
-          ))}
-        </div>
-
-        <div className="mt-6 flex gap-2">
+    <div className="fixed inset-0 z-[60] bg-background flex items-center justify-center">
+      <div
+        className="relative w-full h-full max-w-md mx-auto flex flex-col select-none touch-none"
+        onPointerDown={onDown}
+        onPointerUp={onUp}
+      >
+        <img
+          src={ONBOARDING_SLIDES[step]}
+          alt={`Onboarding ${step + 1}`}
+          className="absolute inset-0 w-full h-full object-contain"
+          draggable={false}
+        />
+        <div className="mt-auto pb-6 pt-4 px-5 z-10 relative flex gap-2 bg-gradient-to-t from-background via-background/85 to-transparent">
           <button
             onClick={onDone}
-            className="flex-1 py-3 rounded-2xl text-xs font-bold tracking-widest stat-card text-muted-foreground"
+            className="flex-1 py-3 rounded-2xl text-xs font-bold tracking-widest stat-card text-muted-foreground active:scale-[0.98]"
           >SKIP</button>
           <button
             onClick={() => last ? onDone() : setStep(step + 1)}
-            className="flex-[2] py-3 rounded-2xl text-xs font-bold tracking-widest bg-shred text-primary-foreground glow-shred flex items-center justify-center gap-2"
+            className="flex-[2] py-3 rounded-2xl text-xs font-bold tracking-widest bg-shred text-primary-foreground glow-shred flex items-center justify-center gap-2 active:scale-[0.98]"
           >
-            {last ? "START SHREDDING" : "NEXT"}
+            {last ? "LET'S SHRED" : "NEXT"}
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
@@ -997,3 +1046,138 @@ function OnboardingOverlay({ onDone }: { onDone: () => void }) {
     </div>
   );
 }
+
+/* -------------------- Username Registration Modal -------------------- */
+
+const USERNAME_RE = /^[a-zA-Z0-9_]{3,16}$/;
+
+function UsernameModal({
+  walletAddress, onConnect, onClose, onRegistered, getEth,
+}: {
+  walletAddress: string | null;
+  onConnect: () => Promise<string | null>;
+  onClose: () => void;
+  onRegistered: (name: string) => void;
+  getEth: () => unknown;
+}) {
+  const [name, setName] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const valid = USERNAME_RE.test(name);
+
+  useEffect(() => {
+    setAvailable(null);
+    setError(null);
+    if (!valid) return;
+    const eth = getEth() as { request: (a: { method: string; params?: unknown[] }) => Promise<unknown> } | null;
+    if (!eth) return;
+    let cancelled = false;
+    setChecking(true);
+    (async () => {
+      try {
+        const { createPublicClient, custom, encodeFunctionData, decodeFunctionResult } = await import("viem");
+        const { celo } = await import("viem/chains");
+        const client = createPublicClient({ chain: celo, transport: custom(eth) });
+        const data = encodeFunctionData({ abi: USERNAME_ABI, functionName: "isAvailable", args: [name] });
+        const res = await client.call({ to: USERNAME_CONTRACT as `0x${string}`, data });
+        const decoded = decodeFunctionResult({ abi: USERNAME_ABI, functionName: "isAvailable", data: res.data ?? "0x" });
+        if (!cancelled) setAvailable(Boolean(decoded));
+      } catch {
+        if (!cancelled) setAvailable(null);
+      } finally {
+        if (!cancelled) setChecking(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [name, valid, getEth]);
+
+  const register = async () => {
+    setError(null);
+    let addr = walletAddress;
+    if (!addr) {
+      addr = await onConnect();
+      if (!addr) { setError("Connect a wallet to register."); return; }
+    }
+    if (!valid) { setError("Username must be 3–16 letters, numbers, or underscores."); return; }
+    setSubmitting(true);
+    try {
+      const eth = getEth() as { request: (a: { method: string; params?: unknown[] }) => Promise<unknown> } | null;
+      if (!eth) throw new Error("No wallet available.");
+      const { createWalletClient, custom } = await import("viem");
+      const { celo } = await import("viem/chains");
+      const client = createWalletClient({ account: addr as `0x${string}`, chain: celo, transport: custom(eth) });
+      await client.writeContract({
+        address: USERNAME_CONTRACT as `0x${string}`,
+        abi: USERNAME_ABI,
+        functionName: "registerUser",
+        args: [name],
+      });
+      onRegistered(name);
+    } catch (e: unknown) {
+      setError((e as Error)?.message?.slice(0, 120) || "Registration failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-background/90 backdrop-blur-md flex items-center justify-center px-4">
+      <div className="w-full max-w-sm rounded-3xl bg-card border border-border p-6 reveal-pop">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Award className="w-5 h-5 text-shred" />
+            <h2 className="font-display text-xl">CLAIM YOUR NAME</h2>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full stat-card flex items-center justify-center" aria-label="Close">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground leading-relaxed mb-4">
+          Pick a username to track your discoveries, XP, and leaderboard rank. This is a one-time on-chain registration signed by your wallet.
+        </p>
+        <div className="relative">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value.replace(/\s/g, ""))}
+            maxLength={16}
+            placeholder="shredder_01"
+            className="w-full bg-secondary/60 border border-border rounded-xl px-4 py-3 text-sm font-bold tracking-wide outline-none focus:border-shred"
+          />
+          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            {checking && <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />}
+            {!checking && valid && available === true && <Check className="w-4 h-4 text-shred" />}
+            {!checking && valid && available === false && <X className="w-4 h-4 text-destructive" />}
+          </div>
+        </div>
+        <div className="mt-2 text-[10px] tracking-wider text-muted-foreground">
+          {!name && "3–16 chars · letters, numbers, underscores"}
+          {name && !valid && <span className="text-destructive">Invalid format.</span>}
+          {valid && available === true && <span className="text-shred">Available!</span>}
+          {valid && available === false && <span className="text-destructive">Already taken.</span>}
+        </div>
+        {error && (
+          <div className="mt-3 text-[11px] text-destructive flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3" /> {error}
+          </div>
+        )}
+        <button
+          onClick={register}
+          disabled={submitting || !valid || available === false}
+          className="mt-5 w-full py-3 rounded-2xl font-bold tracking-widest bg-shred text-primary-foreground glow-shred active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> SIGNING…</> : <>SIGN &amp; REGISTER</>}
+        </button>
+        <button
+          onClick={onClose}
+          className="mt-2 w-full py-2 rounded-xl text-[11px] font-bold tracking-widest text-muted-foreground"
+        >
+          NOT NOW
+        </button>
+      </div>
+    </div>
+  );
+}
+
