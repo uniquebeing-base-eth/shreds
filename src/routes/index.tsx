@@ -367,7 +367,7 @@ function HomeScreen() {
     <div className="min-h-dvh w-full text-foreground pb-20">
       <div className="mx-auto w-full max-w-md px-3 pt-3">
         {/* Header */}
-        <header className="grid grid-cols-[40px_1fr_40px] items-center gap-2">
+        <header className="grid grid-cols-[40px_1fr_88px] items-center gap-2">
           <button
             onClick={() => setShowLeaderboard(true)}
             className="flex flex-col items-center gap-0.5 group"
@@ -392,18 +392,24 @@ function HomeScreen() {
             </div>
           </div>
 
-          <button
-            onClick={() => setShowProfile(true)}
-            className="flex flex-col items-center gap-0.5 group"
-            aria-label="Profile"
-          >
-            <div className="icon-tile w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden group-active:scale-95 transition">
-              <div className="w-full h-full flex items-center justify-center" style={{ background: AVATAR_GRADIENTS[0] }}>
-                <User className="w-4 h-4 text-white" />
-              </div>
+          <div className="flex items-center justify-end gap-1.5">
+            <div className="flex flex-col items-center gap-0.5">
+              <BackgroundMusic bare />
+              <span className="text-[7px] font-semibold tracking-[0.16em] text-muted-foreground">MUSIC</span>
             </div>
-            <span className="text-[7px] font-semibold tracking-[0.16em] text-muted-foreground">PROFILE</span>
-          </button>
+            <button
+              onClick={() => setShowProfile(true)}
+              className="flex flex-col items-center gap-0.5 group"
+              aria-label="Profile"
+            >
+              <div className="icon-tile w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden group-active:scale-95 transition">
+                <div className="w-full h-full flex items-center justify-center" style={{ background: AVATAR_GRADIENTS[0] }}>
+                  <User className="w-4 h-4 text-white" />
+                </div>
+              </div>
+              <span className="text-[7px] font-semibold tracking-[0.16em] text-muted-foreground">PROFILE</span>
+            </button>
+          </div>
         </header>
 
         {/* Stats row */}
