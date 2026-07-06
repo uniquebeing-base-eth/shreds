@@ -841,7 +841,10 @@ function LeaderboardSheet({ onClose }: { onClose: () => void }) {
 
 /* -------------------- Profile -------------------- */
 
-function ProfileSheet({ onClose, wallet, collection }: { onClose: () => void; wallet: string | null; collection: Discovery[] }) {
+function ProfileSheet({ onClose, wallet, collection, username, onRegister }: {
+  onClose: () => void; wallet: string | null; collection: Discovery[];
+  username: string | null; onRegister: () => void;
+}) {
   const cards = collection.filter(c => c.kind === "CARD");
   const facts = collection.filter(c => c.kind === "FACT");
   const stables = collection.filter(c => c.kind === "USDM");
@@ -852,7 +855,7 @@ function ProfileSheet({ onClose, wallet, collection }: { onClose: () => void; wa
       <div className="stat-card rounded-2xl p-4 flex items-center gap-3">
         <div className="w-14 h-14 rounded-2xl shrink-0" style={{ background: AVATAR_GRADIENTS[0] }} />
         <div className="flex-1 min-w-0">
-          <div className="font-display text-xl truncate">SHREDDER_01</div>
+          <div className="font-display text-xl truncate">{username ? username.toUpperCase() : "UNCLAIMED"}</div>
           <div className="text-[11px] text-muted-foreground truncate">{wallet ? shortAddr(wallet) : "Wallet not connected"}</div>
           <div className="mt-2 flex items-center gap-2">
             <div className="px-2 py-0.5 rounded-full bg-shred/15 text-shred text-[10px] font-bold tracking-wider">LVL 7</div>
@@ -863,6 +866,15 @@ function ProfileSheet({ onClose, wallet, collection }: { onClose: () => void; wa
           </div>
         </div>
       </div>
+
+      {!username && (
+        <button
+          onClick={onRegister}
+          className="mt-3 w-full py-3 rounded-2xl bg-shred text-primary-foreground font-bold text-xs tracking-widest glow-shred active:scale-[0.98] flex items-center justify-center gap-2"
+        >
+          <Award className="w-4 h-4" /> REGISTER YOUR USERNAME
+        </button>
+      )}
 
       <div className="grid grid-cols-3 gap-2 mt-4">
         <ProfileStat label="PACKS" value={String(collection.length ? Math.ceil(collection.length / 3) : 0)} />
