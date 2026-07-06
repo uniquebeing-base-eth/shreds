@@ -533,7 +533,7 @@ function HomeScreen() {
           getEth={wallet.getEth}
         />
       )}
-      <BackgroundMusic />
+      
     </div>
   );
 }
