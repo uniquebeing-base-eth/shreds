@@ -346,11 +346,10 @@ function HomeScreen() {
     }, 1700);
   }, [phase, pack.id]);
 
-  const startShred = useCallback(async () => {
+  const startShredInner = useCallback(async () => {
     // If paid and not yet purchased, buy first
     if (pack.priceNum > 0 && !purchased.has(pack.id)) {
       if (!wallet.address) {
-        // prompt wallet connect
         await wallet.connect();
         return;
       }
@@ -372,6 +371,19 @@ function HomeScreen() {
     }
     executeShred();
   }, [pack, purchased, wallet, executeShred]);
+
+  const startShred = useCallback(async () => {
+    // First-time shredders must register a username before the flow continues.
+    if (!username) {
+      if (!wallet.address) {
+        await wallet.connect();
+      }
+      setShowUsernameModal(true);
+      return;
+    }
+    await startShredInner();
+  }, [username, wallet, startShredInner]);
+
 
   const closeReveal = () => { setPhase("idle"); setReveals([]); audio.restoreTheme(); };
 
