@@ -296,16 +296,28 @@ function HomeScreen() {
   const [purchased, setPurchased] = useState<Set<string>>(new Set(["starter"]));
   const [buying, setBuying] = useState(false);
   const [buyError, setBuyError] = useState<string | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
+  const [showUsernameModal, setShowUsernameModal] = useState(false);
   const wallet = useWallet();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!localStorage.getItem("shreds_onboarded")) setShowOnboarding(true);
+    const u = localStorage.getItem("shreds_username");
+    if (u) setUsername(u);
   }, []);
 
   const finishOnboarding = () => {
-    try { localStorage.setItem("shreds_onboarded", "1"); } catch {}
+    try { localStorage.setItem("shreds_onboarded", "1"); } catch { /* noop */ }
     setShowOnboarding(false);
+  };
+
+  const onUsernameRegistered = (name: string) => {
+    try { localStorage.setItem("shreds_username", name); } catch { /* noop */ }
+    setUsername(name);
+    setShowUsernameModal(false);
+    // continue to shredding flow
+    setTimeout(() => { void startShredInner(); }, 200);
   };
 
   const pack = PACKS[index];
