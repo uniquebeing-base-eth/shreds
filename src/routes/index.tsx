@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Trophy, User, Users, Package, Gem, Wallet, Flame, Gift, Star,
   Lightbulb, X, ChevronLeft, ChevronRight, Award, Zap,
-  ArrowRight, Hand, Swords, AlertTriangle,
+  ArrowRight, AlertTriangle, Check, Loader2,
 } from "lucide-react";
 import { BackgroundMusic } from "@/components/BackgroundMusic";
 import { useWallet, shortAddr } from "@/lib/wallet";
@@ -12,7 +12,12 @@ import { rollUsdm, formatUsdm } from "@/lib/rewards";
 import {
   PACK_KEY, PACK_PRICE_USDM, USDM_ADDRESS, PAYMENT_CONTRACT,
   PAYMENT_ABI, ERC20_ABI, CELO_CHAIN_ID,
+  USERNAME_CONTRACT, USERNAME_ABI,
 } from "@/lib/contracts";
+import onboarding1 from "@/assets/onboarding/onboarding-1.png.asset.json";
+import onboarding2 from "@/assets/onboarding/onboarding-2.png.asset.json";
+import onboarding3 from "@/assets/onboarding/onboarding-3.png.asset.json";
+import onboarding4 from "@/assets/onboarding/onboarding-4.png.asset.json";
 
 // Asset maps: sealed + shredded packs, discovery images, collectible cards
 const PACK_IMG: Record<string, string> = {
