@@ -1,22 +1,28 @@
 // Global theme + shred audio manager. Assets live in /public/audio so they
 // ship with the deployed build (works in MiniPay outside the preview).
+// Theme plays once (no loop) on app open; user can pause/replay from header.
+type Listener = (state: { playing: boolean; ended: boolean }) => void;
+
 type AudioBus = {
   theme: HTMLAudioElement | null;
   shred: HTMLAudioElement | null;
-  muted: boolean;
   started: boolean;
+  ended: boolean;
+  listeners: Set<Listener>;
 };
 
-const bus: AudioBus = { theme: null, shred: null, muted: false, started: false };
-const MUTE_KEY = "shreds_muted";
+const bus: AudioBus = { theme: null, shred: null, started: false, ended: false, listeners: new Set() };
 
 function ensure() {
   if (typeof window === "undefined") return;
   if (!bus.theme) {
     const t = new Audio("/audio/theme.mp3");
-    t.loop = true;
+    t.loop = false;
     t.preload = "auto";
-    t.volume = 0;
+    t.volume = THEME_VOL;
+    t.addEventListener("ended", () => { bus.ended = true; emit(); });
+    t.addEventListener("play", emit);
+    t.addEventListener("pause", emit);
     bus.theme = t;
   }
   if (!bus.shred) {
@@ -25,10 +31,15 @@ function ensure() {
     s.volume = 0.9;
     bus.shred = s;
   }
-  try { bus.muted = localStorage.getItem(MUTE_KEY) === "1"; } catch { /* noop */ }
 }
 
-const THEME_VOL = 0.35;
+const THEME_VOL = 0.4;
+
+function emit() {
+  const t = bus.theme;
+  const state = { playing: !!t && !t.paused && !t.ended, ended: !!t?.ended };
+  bus.listeners.forEach((l) => l(state));
+}
 
 function fade(el: HTMLAudioElement, to: number, ms: number) {
   const from = el.volume;
@@ -47,31 +58,49 @@ export const audio = {
     ensure();
     if (!bus.theme || bus.started) return;
     try {
+      bus.theme.volume = THEME_VOL;
       await bus.theme.play();
       bus.started = true;
-      fade(bus.theme, bus.muted ? 0 : THEME_VOL, 900);
+      emit();
     } catch { /* autoplay blocked — will start on first user gesture */ }
+  },
+  async toggleTheme() {
+    ensure();
+    if (!bus.theme) return;
+    if (bus.theme.ended || bus.theme.currentTime >= bus.theme.duration - 0.05) {
+      bus.theme.currentTime = 0;
+      bus.ended = false;
+    }
+    if (bus.theme.paused) {
+      bus.theme.volume = THEME_VOL;
+      try { await bus.theme.play(); bus.started = true; } catch { /* noop */ }
+    } else {
+      bus.theme.pause();
+    }
+    emit();
   },
   duckTheme() {
     ensure();
-    if (bus.theme && !bus.muted) fade(bus.theme, THEME_VOL * 0.15, 260);
+    if (bus.theme && !bus.theme.paused) fade(bus.theme, THEME_VOL * 0.15, 260);
   },
   restoreTheme() {
     ensure();
-    if (bus.theme && !bus.muted) fade(bus.theme, THEME_VOL, 600);
+    if (bus.theme && !bus.theme.paused) fade(bus.theme, THEME_VOL, 600);
   },
   playShred() {
     ensure();
-    if (!bus.shred || bus.muted) return;
+    if (!bus.shred) return;
     try { bus.shred.currentTime = 0; void bus.shred.play(); } catch { /* noop */ }
   },
-  isMuted() { ensure(); return bus.muted; },
-  setMuted(v: boolean) {
+  getShredDuration() {
     ensure();
-    bus.muted = v;
-    try { localStorage.setItem(MUTE_KEY, v ? "1" : "0"); } catch { /* noop */ }
-    if (bus.theme) fade(bus.theme, v ? 0 : (bus.started ? THEME_VOL : 0), 300);
-    if (v && bus.shred) bus.shred.pause();
-    if (!v && !bus.started) void audio.startTheme();
+    const d = bus.shred?.duration;
+    return isFinite(d ?? NaN) ? (d as number) : 1.0;
+  },
+  isPlaying() { ensure(); return !!bus.theme && !bus.theme.paused && !bus.theme.ended; },
+  subscribe(l: Listener) {
+    bus.listeners.add(l);
+    l({ playing: this.isPlaying(), ended: !!bus.theme?.ended });
+    return () => bus.listeners.delete(l);
   },
 };
