@@ -514,8 +514,25 @@ function HomeScreen() {
       )}
 
       {showLeaderboard && <LeaderboardSheet onClose={() => setShowLeaderboard(false)} />}
-      {showProfile && <ProfileSheet onClose={() => setShowProfile(false)} wallet={wallet.address} collection={collection} />}
+      {showProfile && (
+        <ProfileSheet
+          onClose={() => setShowProfile(false)}
+          wallet={wallet.address}
+          collection={collection}
+          username={username}
+          onRegister={() => { setShowProfile(false); setShowUsernameModal(true); }}
+        />
+      )}
       {showOnboarding && <OnboardingOverlay onDone={finishOnboarding} />}
+      {showUsernameModal && (
+        <UsernameModal
+          walletAddress={wallet.address}
+          onConnect={() => wallet.connect()}
+          onClose={() => setShowUsernameModal(false)}
+          onRegistered={onUsernameRegistered}
+          getEth={wallet.getEth}
+        />
+      )}
       <BackgroundMusic />
     </div>
   );
