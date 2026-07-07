@@ -324,8 +324,10 @@ function HomeScreen() {
     if (u) setUsername(u);
     // Signal Farcaster hosts that the mini app is ready — hides the splash screen.
     (async () => {
+      if (typeof window === "undefined") return;
       try {
-        const mod = await import("@farcaster/miniapp-sdk");
+        const path = "@farcaster/miniapp-sdk";
+        const mod = await import(/* @vite-ignore */ path);
         await mod.sdk.actions.ready();
       } catch { /* not running inside a Farcaster host — safe to ignore */ }
     })();

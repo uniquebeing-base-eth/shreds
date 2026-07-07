@@ -7,6 +7,9 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Prevent npm lockfile from being introduced into this Bun project
+package-lock.json
+
 node_modules
 dist
 dist-ssr

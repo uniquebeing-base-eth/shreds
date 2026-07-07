@@ -16,7 +16,8 @@ async function loadFarcasterProvider(): Promise<Eth | null> {
   if (typeof window === "undefined") return null;
   if (fcProvider) return fcProvider;
   try {
-    const mod = await import("@farcaster/miniapp-sdk");
+    const farcasterModuleId = ["@farcaster", "miniapp-sdk"].join("/");
+    const mod = await import(/* @vite-ignore */ farcasterModuleId);
     const sdk = mod.sdk;
     const p = (await sdk.wallet.getEthereumProvider()) as Eth | null;
     if (p) { (p as Eth).isFarcaster = true; fcProvider = p; }
