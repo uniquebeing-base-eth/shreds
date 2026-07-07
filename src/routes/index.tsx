@@ -256,30 +256,50 @@ const AVATAR_GRADIENTS = [
 async function buyPackOnChain(packId: string, walletAddress: string, getEth: () => unknown) {
   const eth = getEth() as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> } | null;
   if (!eth) throw new Error("No wallet");
-  const { createWalletClient, custom, parseUnits, keccak256, encodePacked } = await import("viem");
+  const { createWalletClient, createPublicClient, custom, http, parseUnits, keccak256, encodePacked } = await import("viem");
   const { celo } = await import("viem/chains");
   const client = createWalletClient({
     account: walletAddress as `0x${string}`,
     chain: celo,
     transport: custom(eth),
   });
+  const publicClient = createPublicClient({ chain: celo, transport: http() });
   const price = parseUnits(PACK_PRICE_USDM[packId], 18);
   const orderId = keccak256(encodePacked(["address", "string", "uint256"], [walletAddress as `0x${string}`, packId, BigInt(Date.now())]));
-  // Approve USDM
-  await client.writeContract({
+  // Approve USDM then wait for confirmation
+  const approveTx = await client.writeContract({
     address: USDM_ADDRESS as `0x${string}`,
     abi: ERC20_ABI,
     functionName: "approve",
     args: [PAYMENT_CONTRACT as `0x${string}`, price],
   });
-  // Buy pack
+  await publicClient.waitForTransactionReceipt({ hash: approveTx });
+  // Buy pack and wait for confirmation before returning
   const tx = await client.writeContract({
     address: PAYMENT_CONTRACT as `0x${string}`,
     abi: PAYMENT_ABI,
     functionName: "buyWithToken",
     args: [PACK_KEY[packId]!, USDM_ADDRESS as `0x${string}`, orderId],
   });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: tx });
+  if (receipt.status !== "success") throw new Error("Payment transaction reverted");
   return tx;
+}
+
+/* -------------------- Username helper -------------------- */
+async function fetchUsernameOnChain(walletAddress: string): Promise<string | null> {
+  try {
+    const { createPublicClient, http } = await import("viem");
+    const { celo } = await import("viem/chains");
+    const publicClient = createPublicClient({ chain: celo, transport: http() });
+    const name = (await publicClient.readContract({
+      address: USERNAME_CONTRACT as `0x${string}`,
+      abi: USERNAME_ABI,
+      functionName: "usernameOf",
+      args: [walletAddress as `0x${string}`],
+    })) as string;
+    return name && name.length > 0 ? name : null;
+  } catch { return null; }
 }
 
 /* -------------------- Home Screen -------------------- */
@@ -306,6 +326,18 @@ function HomeScreen() {
     const u = localStorage.getItem("shreds_username");
     if (u) setUsername(u);
   }, []);
+
+  // Auto-detect existing on-chain username whenever wallet connects
+  useEffect(() => {
+    if (!wallet.address) return;
+    let cancelled = false;
+    void fetchUsernameOnChain(wallet.address).then((name) => {
+      if (cancelled || !name) return;
+      setUsername(name);
+      try { localStorage.setItem("shreds_username", name); } catch { /* noop */ }
+    });
+    return () => { cancelled = true; };
+  }, [wallet.address]);
 
   const finishOnboarding = () => {
     try { localStorage.setItem("shreds_onboarded", "1"); } catch { /* noop */ }
