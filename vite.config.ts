@@ -13,6 +13,9 @@ export default defineConfig({
       "rpc-websockets": fileURLToPath(new URL("./src/shims/rpc-websockets.ts", import.meta.url)),
     },
   },
+  ssr: {
+    external: ["rpc-websockets"],
+  },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
