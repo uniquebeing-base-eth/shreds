@@ -351,9 +351,10 @@ function HomeScreen() {
   const pack = PACKS[index];
 
   useEffect(() => {
-    const t = setInterval(() => setTickerIdx((i) => (i + 1) % LIVE_EVENTS.length), 3500);
+    if (liveEvents.length < 2) return;
+    const t = setInterval(() => setTickerIdx((i) => (i + 1) % liveEvents.length), 3500);
     return () => clearInterval(t);
-  }, []);
+  }, [liveEvents.length]);
 
   const goPrev = () => setIndex((i) => (i - 1 + PACKS.length) % PACKS.length);
   const goNext = () => setIndex((i) => (i + 1) % PACKS.length);
