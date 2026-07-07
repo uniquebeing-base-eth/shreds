@@ -7,26 +7,11 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
-const rpcWebsocketsShim = fileURLToPath(new URL("./src/shims/rpc-websockets.ts", import.meta.url));
-
 export default defineConfig({
   resolve: {
     alias: {
-      "rpc-websockets": rpcWebsocketsShim,
+      "rpc-websockets": fileURLToPath(new URL("./node_modules/rpc-websockets/dist/index.browser.mjs", import.meta.url)),
     },
-  },
-  build: {
-    rollupOptions: {
-      external: ["rpc-websockets"],
-      output: {
-        globals: {
-          "rpc-websockets": "rpcWebsockets",
-        },
-      },
-    },
-  },
-  ssr: {
-    external: ["rpc-websockets"],
   },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
