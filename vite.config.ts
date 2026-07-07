@@ -7,10 +7,22 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
+const rpcWebsocketsShim = fileURLToPath(new URL("./src/shims/rpc-websockets.ts", import.meta.url));
+
 export default defineConfig({
   resolve: {
     alias: {
-      "rpc-websockets": fileURLToPath(new URL("./src/shims/rpc-websockets.ts", import.meta.url)),
+      "rpc-websockets": rpcWebsocketsShim,
+    },
+  },
+  build: {
+    rollupOptions: {
+      external: ["rpc-websockets"],
+      output: {
+        globals: {
+          "rpc-websockets": "rpcWebsockets",
+        },
+      },
     },
   },
   ssr: {
