@@ -115,6 +115,7 @@ export function useWallet() {
     address,
     status,
     isMiniPay,
+    isFarcaster,
     chainId,
     isCorrectChain: chainId === CELO_CHAIN_ID,
     connect,
