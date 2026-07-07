@@ -322,6 +322,13 @@ function HomeScreen() {
     if (!localStorage.getItem("shreds_onboarded")) setShowOnboarding(true);
     const u = localStorage.getItem("shreds_username");
     if (u) setUsername(u);
+    // Signal Farcaster hosts that the mini app is ready — hides the splash screen.
+    (async () => {
+      try {
+        const mod = await import("@farcaster/miniapp-sdk");
+        await mod.sdk.actions.ready();
+      } catch { /* not running inside a Farcaster host — safe to ignore */ }
+    })();
   }, []);
 
   // Auto-detect existing on-chain username whenever wallet connects
