@@ -62,14 +62,18 @@ export function useWallet() {
   const [address, setAddress] = useState<string | null>(null);
   const [status, setStatus] = useState<WalletStatus>("idle");
   const [isMiniPay, setIsMiniPay] = useState(false);
+  const [isFarcaster, setIsFarcaster] = useState(false);
   const [chainId, setChainId] = useState<number | null>(null);
 
   const connect = useCallback(async (opts?: { silent?: boolean }) => {
-    const eth = getEth();
+    let eth = getEth();
+    // Fallback: no injected provider — try Farcaster mini-app SDK.
+    if (!eth) eth = await loadFarcasterProvider();
     if (!eth) { setStatus("unavailable"); return null; }
     setStatus("connecting");
     try {
       setIsMiniPay(!!eth.isMiniPay);
+      setIsFarcaster(!!eth.isFarcaster);
       const method = eth.isMiniPay || opts?.silent ? "eth_accounts" : "eth_requestAccounts";
       const accounts = (await eth.request({ method })) as string[];
       const acct = accounts?.[0] ?? null;
