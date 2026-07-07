@@ -83,12 +83,50 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:title", content: "Shreds — Discover. Collect. Earn." },
       { property: "og:description", content: "Slash open digital packs. Discover stablecoins, collectibles and rare knowledge." },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: "https://shred.signalify.xyz/image.png" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: "https://shred.signalify.xyz/image.png" },
+      // Farcaster Mini App embed — makes casts of this URL render as a launch card.
+      {
+        name: "fc:miniapp",
+        content: JSON.stringify({
+          version: "1",
+          imageUrl: "https://shred.signalify.xyz/image.png",
+          button: {
+            title: "Launch Shreds",
+            action: {
+              type: "launch_miniapp",
+              name: "Shreds",
+              url: "https://shred.signalify.xyz",
+              splashImageUrl: "https://shred.signalify.xyz/splash.png",
+              splashBackgroundColor: "#0a0f0a",
+            },
+          },
+        }),
+      },
+      // Backwards-compat for older Farcaster clients.
+      {
+        name: "fc:frame",
+        content: JSON.stringify({
+          version: "1",
+          imageUrl: "https://shred.signalify.xyz/image.png",
+          button: {
+            title: "Launch Shreds",
+            action: {
+              type: "launch_frame",
+              name: "Shreds",
+              url: "https://shred.signalify.xyz",
+              splashImageUrl: "https://shred.signalify.xyz/splash.png",
+              splashBackgroundColor: "#0a0f0a",
+            },
+          },
+        }),
+      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.png", type: "image/png" },
-      { rel: "apple-touch-icon", href: "/favicon.png" },
+      { rel: "icon", href: "/icon.png", type: "image/png" },
+      { rel: "apple-touch-icon", href: "/icon.png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" },
