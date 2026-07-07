@@ -8,14 +8,20 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
-  resolve: {
-    alias: {
-      "rpc-websockets": fileURLToPath(new URL("./node_modules/rpc-websockets/dist/index.browser.mjs", import.meta.url)),
-    },
-  },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
     server: { entry: "server" },
+  },
+  // Pass through additional Vite options to handle browser-incompatible packages
+  vite: {
+    // Vite now supports tsconfig path resolution natively
+    resolve: { tsconfigPaths: true },
+    build: {
+      rolldownOptions: {
+        // Externalize rpc-websockets which is not browser-resolvable in some deps
+        external: ["rpc-websockets"],
+      },
+    },
   },
 });
