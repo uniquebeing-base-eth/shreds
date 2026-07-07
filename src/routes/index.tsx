@@ -314,6 +314,7 @@ function HomeScreen() {
   const [buyError, setBuyError] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [showUsernameModal, setShowUsernameModal] = useState(false);
+  const [liveEvents, setLiveEvents] = useState<LiveEvent[]>(LIVE_EVENTS_SEED);
   const wallet = useWallet();
 
   useEffect(() => {
