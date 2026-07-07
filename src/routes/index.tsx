@@ -327,6 +327,18 @@ function HomeScreen() {
     if (u) setUsername(u);
   }, []);
 
+  // Auto-detect existing on-chain username whenever wallet connects
+  useEffect(() => {
+    if (!wallet.address) return;
+    let cancelled = false;
+    void fetchUsernameOnChain(wallet.address).then((name) => {
+      if (cancelled || !name) return;
+      setUsername(name);
+      try { localStorage.setItem("shreds_username", name); } catch { /* noop */ }
+    });
+    return () => { cancelled = true; };
+  }, [wallet.address]);
+
   const finishOnboarding = () => {
     try { localStorage.setItem("shreds_onboarded", "1"); } catch { /* noop */ }
     setShowOnboarding(false);
