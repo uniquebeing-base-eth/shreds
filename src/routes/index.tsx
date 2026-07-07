@@ -838,19 +838,9 @@ function LiveTicker({ event, idx }: { event: LiveEvent; idx: number }) {
 
 /* -------------------- Leaderboard -------------------- */
 
-const LB_USERS = [
-  "Ada", "David", "Sarah", "Michael", "Lin", "Kwame", "Nia", "Jorge", "Priya", "Mateo",
-];
-
 function LeaderboardSheet({ onClose }: { onClose: () => void }) {
   const tabs = ["Daily", "Weekly", "Monthly", "All Time"] as const;
   const [tab, setTab] = useState<typeof tabs[number]>("Weekly");
-  const rows = useMemo(() => {
-    const seed = tab === "Daily" ? 1 : tab === "Weekly" ? 3 : tab === "Monthly" ? 7 : 11;
-    return LB_USERS.map((u, i) => ({
-      user: u, xp: (10000 * (10 - i) + seed * 137 * (i + 1)).toLocaleString(),
-    }));
-  }, [tab]);
 
   return (
     <Sheet title="Leaderboard" onClose={onClose} Icon={Trophy}>
@@ -863,18 +853,7 @@ function LeaderboardSheet({ onClose }: { onClose: () => void }) {
           >{t.toUpperCase()}</button>
         ))}
       </div>
-      <div className="space-y-2">
-        {rows.map((r, i) => (
-          <div key={r.user} className="stat-card rounded-xl px-3 py-3 flex items-center gap-3">
-            <div className="w-8 text-center font-display text-xl shrink-0" style={{ color: i === 0 ? "var(--gold)" : i === 1 ? "oklch(0.8 0.02 150)" : i === 2 ? "oklch(0.68 0.15 40)" : "var(--muted-foreground)" }}>
-              #{i + 1}
-            </div>
-            <div className="w-9 h-9 rounded-full shrink-0" style={{ background: AVATAR_GRADIENTS[i % AVATAR_GRADIENTS.length] }} />
-            <div className="flex-1 font-bold truncate min-w-0">{r.user}</div>
-            <div className="text-shred font-bold text-sm shrink-0">{r.xp} <span className="text-[10px] tracking-widest text-muted-foreground">XP</span></div>
-          </div>
-        ))}
-      </div>
+      <EmptyState text={`No ${tab.toLowerCase()} rankings yet. Be the first to shred and claim the top spot.`} />
     </Sheet>
   );
 }
