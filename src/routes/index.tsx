@@ -876,13 +876,22 @@ function ProfileSheet({ onClose, wallet, collection, username, onRegister }: {
         <div className="flex-1 min-w-0">
           <div className="font-display text-xl truncate">{username ? username.toUpperCase() : "UNCLAIMED"}</div>
           <div className="text-[11px] text-muted-foreground truncate">{wallet ? shortAddr(wallet) : "Wallet not connected"}</div>
-          <div className="mt-2 flex items-center gap-2">
-            <div className="px-2 py-0.5 rounded-full bg-shred/15 text-shred text-[10px] font-bold tracking-wider">LVL 7</div>
-            <div className="text-[11px] text-muted-foreground">1,250 / 2,000 XP</div>
-          </div>
-          <div className="mt-1.5 h-1.5 w-full rounded-full bg-secondary overflow-hidden">
-            <div className="h-full bg-shred glow-shred" style={{ width: "62%" }} />
-          </div>
+          {(() => {
+            const xp = collection.filter(c => c.kind === "XP").reduce((s, c) => s + (c.amountRaw ?? 0), 0);
+            const level = Math.max(1, Math.floor(xp / 500) + 1);
+            const into = xp % 500;
+            return (
+              <>
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="px-2 py-0.5 rounded-full bg-shred/15 text-shred text-[10px] font-bold tracking-wider">LVL {level}</div>
+                  <div className="text-[11px] text-muted-foreground">{into.toLocaleString()} / 500 XP</div>
+                </div>
+                <div className="mt-1.5 h-1.5 w-full rounded-full bg-secondary overflow-hidden">
+                  <div className="h-full bg-shred glow-shred" style={{ width: `${(into / 500) * 100}%` }} />
+                </div>
+              </>
+            );
+          })()}
         </div>
       </div>
 
