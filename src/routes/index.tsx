@@ -63,11 +63,11 @@ type Pack = {
 };
 
 const PACKS: Pack[] = [
-  { id: "starter", name: "Starter Pack", image: PACK_IMG.starter, shredded: SHREDDED_IMG.starter, accent: "oklch(0.88 0.28 135)", glow: "oklch(0.88 0.28 135 / 55%)", price: "FREE", priceNum: 0, owners: "102K+", shreddedCnt: "248K+", discoveries: "127+" },
-  { id: "mystery", name: "Mystery Pack", image: PACK_IMG.mystery, shredded: SHREDDED_IMG.mystery, accent: "oklch(0.68 0.22 300)", glow: "oklch(0.68 0.22 300 / 55%)", price: "$0.25", priceNum: 0.25, owners: "58K+", shreddedCnt: "142K+", discoveries: "89+" },
-  { id: "alpha", name: "Alpha Pack", image: PACK_IMG.alpha, shredded: SHREDDED_IMG.alpha, accent: "oklch(0.82 0.17 85)", glow: "oklch(0.82 0.17 85 / 55%)", price: "$0.75", priceNum: 0.75, owners: "24K+", shreddedCnt: "71K+", discoveries: "54+" },
-  { id: "legendary", name: "Legendary Pack", image: PACK_IMG.legendary, shredded: SHREDDED_IMG.legendary, accent: "oklch(0.78 0.2 60)", glow: "oklch(0.78 0.2 60 / 55%)", price: "$1.50", priceNum: 1.50, owners: "6.2K+", shreddedCnt: "18K+", discoveries: "32+" },
-  { id: "explorer", name: "Explorer Pack", image: PACK_IMG.explorer, shredded: SHREDDED_IMG.explorer, accent: "oklch(0.85 0.18 75)", glow: "oklch(0.85 0.18 75 / 55%)", price: "$3.00", priceNum: 3.00, owners: "812", shreddedCnt: "2.1K", discoveries: "18+" },
+  { id: "starter", name: "Starter Pack", image: PACK_IMG.starter, shredded: SHREDDED_IMG.starter, accent: "oklch(0.88 0.28 135)", glow: "oklch(0.88 0.28 135 / 55%)", price: "FREE", priceNum: 0, owners: "—", shreddedCnt: "—", discoveries: "—" },
+  { id: "mystery", name: "Mystery Pack", image: PACK_IMG.mystery, shredded: SHREDDED_IMG.mystery, accent: "oklch(0.68 0.22 300)", glow: "oklch(0.68 0.22 300 / 55%)", price: "$0.25", priceNum: 0.25, owners: "—", shreddedCnt: "—", discoveries: "—" },
+  { id: "alpha", name: "Alpha Pack", image: PACK_IMG.alpha, shredded: SHREDDED_IMG.alpha, accent: "oklch(0.82 0.17 85)", glow: "oklch(0.82 0.17 85 / 55%)", price: "$0.75", priceNum: 0.75, owners: "—", shreddedCnt: "—", discoveries: "—" },
+  { id: "legendary", name: "Legendary Pack", image: PACK_IMG.legendary, shredded: SHREDDED_IMG.legendary, accent: "oklch(0.78 0.2 60)", glow: "oklch(0.78 0.2 60 / 55%)", price: "$1.50", priceNum: 1.50, owners: "—", shreddedCnt: "—", discoveries: "—" },
+  { id: "explorer", name: "Explorer Pack", image: PACK_IMG.explorer, shredded: SHREDDED_IMG.explorer, accent: "oklch(0.85 0.18 75)", glow: "oklch(0.85 0.18 75 / 55%)", price: "$3.00", priceNum: 3.00, owners: "—", shreddedCnt: "—", discoveries: "—" },
 ];
 
 /* -------------------- Facts (100) -------------------- */
@@ -234,14 +234,10 @@ function buildDiscoveries(packId: string): Discovery[] {
   return items;
 }
 
-const LIVE_EVENTS = [
-  { user: "Ada", text: "discovered", accent: "2.50 USDM", from: "Mystery Pack" },
-  { user: "David", text: "unlocked", accent: "a Rare Card", from: "Alpha Pack" },
-  { user: "Sarah", text: "found", accent: "a MiniPay Fact", from: "Starter Pack" },
-  { user: "Michael", text: "completed", accent: "a Collection", from: "Legendary Pack" },
-  { user: "Lin", text: "discovered", accent: "5.00 USDM", from: "Explorer Pack" },
-  { user: "Kwame", text: "unlocked", accent: "a Legendary Card", from: "Legendary Pack" },
-];
+// Live event feed — populated from real activity (Supabase realtime).
+// Starts empty; entries are prepended as they arrive.
+type LiveEvent = { user: string; text: string; accent: string; from: string };
+const LIVE_EVENTS_SEED: LiveEvent[] = [];
 
 const AVATAR_GRADIENTS = [
   "linear-gradient(135deg,#4ade80,#22c55e)",
@@ -318,6 +314,7 @@ function HomeScreen() {
   const [buyError, setBuyError] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [showUsernameModal, setShowUsernameModal] = useState(false);
+  const [liveEvents, setLiveEvents] = useState<LiveEvent[]>(LIVE_EVENTS_SEED);
   const wallet = useWallet();
 
   useEffect(() => {
@@ -325,6 +322,13 @@ function HomeScreen() {
     if (!localStorage.getItem("shreds_onboarded")) setShowOnboarding(true);
     const u = localStorage.getItem("shreds_username");
     if (u) setUsername(u);
+    // Signal Farcaster hosts that the mini app is ready — hides the splash screen.
+    (async () => {
+      try {
+        const mod = await import("@farcaster/miniapp-sdk");
+        await mod.sdk.actions.ready();
+      } catch { /* not running inside a Farcaster host — safe to ignore */ }
+    })();
   }, []);
 
   // Auto-detect existing on-chain username whenever wallet connects
@@ -355,9 +359,10 @@ function HomeScreen() {
   const pack = PACKS[index];
 
   useEffect(() => {
-    const t = setInterval(() => setTickerIdx((i) => (i + 1) % LIVE_EVENTS.length), 3500);
+    if (liveEvents.length < 2) return;
+    const t = setInterval(() => setTickerIdx((i) => (i + 1) % liveEvents.length), 3500);
     return () => clearInterval(t);
-  }, []);
+  }, [liveEvents.length]);
 
   const goPrev = () => setIndex((i) => (i - 1 + PACKS.length) % PACKS.length);
   const goNext = () => setIndex((i) => (i + 1) % PACKS.length);
@@ -375,8 +380,18 @@ function HomeScreen() {
     setTimeout(() => {
       setPhase("revealing");
       setCollection((c) => [...items, ...c].slice(0, 60));
+      // Announce the top discovery in the live ticker.
+      const top = items.find((i) => i.kind === "USDM") ?? items[0];
+      const label = username ?? (wallet.address ? shortAddr(wallet.address) : "Shredder");
+      setLiveEvents((prev) => [{
+        user: label,
+        text: top.kind === "USDM" ? "discovered" : top.kind === "CARD" ? "unlocked" : "found",
+        accent: top.title,
+        from: pack.name,
+      }, ...prev].slice(0, 20));
+      setTickerIdx(0);
     }, 1700);
-  }, [phase, pack.id]);
+  }, [phase, pack.id, pack.name, username, wallet.address]);
 
   const startShredInner = useCallback(async () => {
     // If paid and not yet purchased, buy first
@@ -435,13 +450,13 @@ function HomeScreen() {
             <span className="text-[7px] font-semibold tracking-[0.16em] text-muted-foreground">LEADER</span>
           </button>
 
-          <div className="flex flex-col items-center min-w-0">
+          <div className="flex flex-col items-center justify-center min-w-0 gap-0.5">
             <img
               src={WORDMARK_SRC}
               alt="Shreds"
-              className="h-16 w-auto max-w-full object-contain drop-shadow-[0_0_28px_oklch(0.88_0.28_135/0.6)]"
+              className="h-7 w-auto max-w-full object-contain drop-shadow-[0_0_18px_oklch(0.88_0.28_135/0.6)]"
             />
-            <div className="mt-0.5 text-[7px] font-bold tracking-[0.18em] whitespace-nowrap">
+            <div className="text-[7px] font-bold tracking-[0.18em] whitespace-nowrap">
               <span className="text-foreground">DISCOVER. </span>
               <span className="text-shred">COLLECT. </span>
               <span className="text-[color:var(--gold)]">EARN.</span>
@@ -468,12 +483,12 @@ function HomeScreen() {
           </div>
         </header>
 
-        {/* Stats row */}
+        {/* Stats row — live counters (start at 0 until on-chain data is indexed) */}
         <div className="mt-2 stat-card rounded-lg px-1.5 py-1 grid grid-cols-4 gap-0.5">
-          <StatCompact icon={<Users className="w-3 h-3 text-shred" />} value="184K+" label="SHREDDERS" />
-          <StatCompact icon={<Package className="w-3 h-3 text-[color:oklch(0.7_0.18_240)]" />} value="2.8M+" label="SHREDDED" />
-          <StatCompact icon={<Gem className="w-3 h-3 text-[color:var(--royal)]" />} value="945K+" label="DISCOVER" />
-          <StatCompact icon={<Wallet className="w-3 h-3 text-[color:var(--gold)]" />} value="$126K+" label="REWARDS" />
+          <StatCompact icon={<Users className="w-3 h-3 text-shred" />} value="0" label="SHREDDERS" />
+          <StatCompact icon={<Package className="w-3 h-3 text-[color:oklch(0.7_0.18_240)]" />} value="0" label="SHREDDED" />
+          <StatCompact icon={<Gem className="w-3 h-3 text-[color:var(--royal)]" />} value="0" label="DISCOVER" />
+          <StatCompact icon={<Wallet className="w-3 h-3 text-[color:var(--gold)]" />} value="$0" label="REWARDS" />
         </div>
 
         {/* Pack carousel */}
@@ -539,7 +554,7 @@ function HomeScreen() {
         </div>
       </div>
 
-      <LiveTicker event={LIVE_EVENTS[tickerIdx]} idx={tickerIdx} />
+      {liveEvents.length > 0 && <LiveTicker event={liveEvents[tickerIdx]} idx={tickerIdx} />}
 
       {phase !== "idle" && (
         <RevealOverlay phase={phase} reveals={reveals} pack={pack} onClose={closeReveal} />
@@ -806,7 +821,7 @@ function RevealOverlay({ phase, reveals, pack, onClose }: {
 
 /* -------------------- Live Ticker -------------------- */
 
-function LiveTicker({ event, idx }: { event: typeof LIVE_EVENTS[number]; idx: number }) {
+function LiveTicker({ event, idx }: { event: LiveEvent; idx: number }) {
   return (
     <div className="fixed bottom-2 inset-x-0 flex justify-center px-2 z-30 pointer-events-none">
       <div key={idx} className="ticker-in stat-card rounded-full px-2.5 py-1 flex items-center gap-1.5 w-full max-w-md pointer-events-auto">
@@ -830,19 +845,9 @@ function LiveTicker({ event, idx }: { event: typeof LIVE_EVENTS[number]; idx: nu
 
 /* -------------------- Leaderboard -------------------- */
 
-const LB_USERS = [
-  "Ada", "David", "Sarah", "Michael", "Lin", "Kwame", "Nia", "Jorge", "Priya", "Mateo",
-];
-
 function LeaderboardSheet({ onClose }: { onClose: () => void }) {
   const tabs = ["Daily", "Weekly", "Monthly", "All Time"] as const;
   const [tab, setTab] = useState<typeof tabs[number]>("Weekly");
-  const rows = useMemo(() => {
-    const seed = tab === "Daily" ? 1 : tab === "Weekly" ? 3 : tab === "Monthly" ? 7 : 11;
-    return LB_USERS.map((u, i) => ({
-      user: u, xp: (10000 * (10 - i) + seed * 137 * (i + 1)).toLocaleString(),
-    }));
-  }, [tab]);
 
   return (
     <Sheet title="Leaderboard" onClose={onClose} Icon={Trophy}>
@@ -855,18 +860,7 @@ function LeaderboardSheet({ onClose }: { onClose: () => void }) {
           >{t.toUpperCase()}</button>
         ))}
       </div>
-      <div className="space-y-2">
-        {rows.map((r, i) => (
-          <div key={r.user} className="stat-card rounded-xl px-3 py-3 flex items-center gap-3">
-            <div className="w-8 text-center font-display text-xl shrink-0" style={{ color: i === 0 ? "var(--gold)" : i === 1 ? "oklch(0.8 0.02 150)" : i === 2 ? "oklch(0.68 0.15 40)" : "var(--muted-foreground)" }}>
-              #{i + 1}
-            </div>
-            <div className="w-9 h-9 rounded-full shrink-0" style={{ background: AVATAR_GRADIENTS[i % AVATAR_GRADIENTS.length] }} />
-            <div className="flex-1 font-bold truncate min-w-0">{r.user}</div>
-            <div className="text-shred font-bold text-sm shrink-0">{r.xp} <span className="text-[10px] tracking-widest text-muted-foreground">XP</span></div>
-          </div>
-        ))}
-      </div>
+      <EmptyState text={`No ${tab.toLowerCase()} rankings yet. Be the first to shred and claim the top spot.`} />
     </Sheet>
   );
 }
@@ -889,13 +883,22 @@ function ProfileSheet({ onClose, wallet, collection, username, onRegister }: {
         <div className="flex-1 min-w-0">
           <div className="font-display text-xl truncate">{username ? username.toUpperCase() : "UNCLAIMED"}</div>
           <div className="text-[11px] text-muted-foreground truncate">{wallet ? shortAddr(wallet) : "Wallet not connected"}</div>
-          <div className="mt-2 flex items-center gap-2">
-            <div className="px-2 py-0.5 rounded-full bg-shred/15 text-shred text-[10px] font-bold tracking-wider">LVL 7</div>
-            <div className="text-[11px] text-muted-foreground">1,250 / 2,000 XP</div>
-          </div>
-          <div className="mt-1.5 h-1.5 w-full rounded-full bg-secondary overflow-hidden">
-            <div className="h-full bg-shred glow-shred" style={{ width: "62%" }} />
-          </div>
+          {(() => {
+            const xp = collection.filter(c => c.kind === "XP").reduce((s, c) => s + (c.amountRaw ?? 0), 0);
+            const level = Math.max(1, Math.floor(xp / 500) + 1);
+            const into = xp % 500;
+            return (
+              <>
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="px-2 py-0.5 rounded-full bg-shred/15 text-shred text-[10px] font-bold tracking-wider">LVL {level}</div>
+                  <div className="text-[11px] text-muted-foreground">{into.toLocaleString()} / 500 XP</div>
+                </div>
+                <div className="mt-1.5 h-1.5 w-full rounded-full bg-secondary overflow-hidden">
+                  <div className="h-full bg-shred glow-shred" style={{ width: `${(into / 500) * 100}%` }} />
+                </div>
+              </>
+            );
+          })()}
         </div>
       </div>
 

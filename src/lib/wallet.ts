@@ -4,14 +4,31 @@ import { CELO_CHAIN_HEX, CELO_CHAIN_ID } from "./contracts";
 type Eth = {
   isMiniPay?: boolean;
   isMetaMask?: boolean;
+  isFarcaster?: boolean;
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
   on?: (event: string, cb: (...a: unknown[]) => void) => void;
   removeListener?: (event: string, cb: (...a: unknown[]) => void) => void;
 };
 
+// Cached Farcaster provider (loaded lazily to avoid SSR issues).
+let fcProvider: Eth | null = null;
+async function loadFarcasterProvider(): Promise<Eth | null> {
+  if (typeof window === "undefined") return null;
+  if (fcProvider) return fcProvider;
+  try {
+    const mod = await import("@farcaster/miniapp-sdk");
+    const sdk = mod.sdk;
+    const p = (await sdk.wallet.getEthereumProvider()) as Eth | null;
+    if (p) { (p as Eth).isFarcaster = true; fcProvider = p; }
+    return fcProvider;
+  } catch { return null; }
+}
+
 function getEth(): Eth | null {
   if (typeof window === "undefined") return null;
-  return (window as unknown as { ethereum?: Eth }).ethereum ?? null;
+  const injected = (window as unknown as { ethereum?: Eth }).ethereum ?? null;
+  if (injected) return injected;
+  return fcProvider;
 }
 
 async function ensureCelo(eth: Eth) {
@@ -45,14 +62,18 @@ export function useWallet() {
   const [address, setAddress] = useState<string | null>(null);
   const [status, setStatus] = useState<WalletStatus>("idle");
   const [isMiniPay, setIsMiniPay] = useState(false);
+  const [isFarcaster, setIsFarcaster] = useState(false);
   const [chainId, setChainId] = useState<number | null>(null);
 
   const connect = useCallback(async (opts?: { silent?: boolean }) => {
-    const eth = getEth();
+    let eth = getEth();
+    // Fallback: no injected provider — try Farcaster mini-app SDK.
+    if (!eth) eth = await loadFarcasterProvider();
     if (!eth) { setStatus("unavailable"); return null; }
     setStatus("connecting");
     try {
       setIsMiniPay(!!eth.isMiniPay);
+      setIsFarcaster(!!eth.isFarcaster);
       const method = eth.isMiniPay || opts?.silent ? "eth_accounts" : "eth_requestAccounts";
       const accounts = (await eth.request({ method })) as string[];
       const acct = accounts?.[0] ?? null;
@@ -94,6 +115,7 @@ export function useWallet() {
     address,
     status,
     isMiniPay,
+    isFarcaster,
     chainId,
     isCorrectChain: chainId === CELO_CHAIN_ID,
     connect,
