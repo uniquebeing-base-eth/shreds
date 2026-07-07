@@ -443,13 +443,13 @@ function HomeScreen() {
             <span className="text-[7px] font-semibold tracking-[0.16em] text-muted-foreground">LEADER</span>
           </button>
 
-          <div className="flex flex-col items-center min-w-0">
+          <div className="flex flex-col items-center justify-center min-w-0 gap-0.5">
             <img
               src={WORDMARK_SRC}
               alt="Shreds"
-              className="h-16 w-auto max-w-full object-contain drop-shadow-[0_0_28px_oklch(0.88_0.28_135/0.6)]"
+              className="h-7 w-auto max-w-full object-contain drop-shadow-[0_0_18px_oklch(0.88_0.28_135/0.6)]"
             />
-            <div className="mt-0.5 text-[7px] font-bold tracking-[0.18em] whitespace-nowrap">
+            <div className="text-[7px] font-bold tracking-[0.18em] whitespace-nowrap">
               <span className="text-foreground">DISCOVER. </span>
               <span className="text-shred">COLLECT. </span>
               <span className="text-[color:var(--gold)]">EARN.</span>
@@ -476,12 +476,12 @@ function HomeScreen() {
           </div>
         </header>
 
-        {/* Stats row */}
+        {/* Stats row — live counters (start at 0 until on-chain data is indexed) */}
         <div className="mt-2 stat-card rounded-lg px-1.5 py-1 grid grid-cols-4 gap-0.5">
-          <StatCompact icon={<Users className="w-3 h-3 text-shred" />} value="184K+" label="SHREDDERS" />
-          <StatCompact icon={<Package className="w-3 h-3 text-[color:oklch(0.7_0.18_240)]" />} value="2.8M+" label="SHREDDED" />
-          <StatCompact icon={<Gem className="w-3 h-3 text-[color:var(--royal)]" />} value="945K+" label="DISCOVER" />
-          <StatCompact icon={<Wallet className="w-3 h-3 text-[color:var(--gold)]" />} value="$126K+" label="REWARDS" />
+          <StatCompact icon={<Users className="w-3 h-3 text-shred" />} value="0" label="SHREDDERS" />
+          <StatCompact icon={<Package className="w-3 h-3 text-[color:oklch(0.7_0.18_240)]" />} value="0" label="SHREDDED" />
+          <StatCompact icon={<Gem className="w-3 h-3 text-[color:var(--royal)]" />} value="0" label="DISCOVER" />
+          <StatCompact icon={<Wallet className="w-3 h-3 text-[color:var(--gold)]" />} value="$0" label="REWARDS" />
         </div>
 
         {/* Pack carousel */}
