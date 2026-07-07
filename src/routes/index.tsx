@@ -804,7 +804,7 @@ function RevealOverlay({ phase, reveals, pack, onClose }: {
 
 /* -------------------- Live Ticker -------------------- */
 
-function LiveTicker({ event, idx }: { event: typeof LIVE_EVENTS[number]; idx: number }) {
+function LiveTicker({ event, idx }: { event: LiveEvent; idx: number }) {
   return (
     <div className="fixed bottom-2 inset-x-0 flex justify-center px-2 z-30 pointer-events-none">
       <div key={idx} className="ticker-in stat-card rounded-full px-2.5 py-1 flex items-center gap-1.5 w-full max-w-md pointer-events-auto">
