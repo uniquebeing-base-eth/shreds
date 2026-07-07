@@ -4,14 +4,31 @@ import { CELO_CHAIN_HEX, CELO_CHAIN_ID } from "./contracts";
 type Eth = {
   isMiniPay?: boolean;
   isMetaMask?: boolean;
+  isFarcaster?: boolean;
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
   on?: (event: string, cb: (...a: unknown[]) => void) => void;
   removeListener?: (event: string, cb: (...a: unknown[]) => void) => void;
 };
 
+// Cached Farcaster provider (loaded lazily to avoid SSR issues).
+let fcProvider: Eth | null = null;
+async function loadFarcasterProvider(): Promise<Eth | null> {
+  if (typeof window === "undefined") return null;
+  if (fcProvider) return fcProvider;
+  try {
+    const mod = await import("@farcaster/miniapp-sdk");
+    const sdk = mod.sdk;
+    const p = (await sdk.wallet.getEthereumProvider()) as Eth | null;
+    if (p) { (p as Eth).isFarcaster = true; fcProvider = p; }
+    return fcProvider;
+  } catch { return null; }
+}
+
 function getEth(): Eth | null {
   if (typeof window === "undefined") return null;
-  return (window as unknown as { ethereum?: Eth }).ethereum ?? null;
+  const injected = (window as unknown as { ethereum?: Eth }).ethereum ?? null;
+  if (injected) return injected;
+  return fcProvider;
 }
 
 async function ensureCelo(eth: Eth) {
