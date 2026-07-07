@@ -537,7 +537,7 @@ function HomeScreen() {
         </div>
       </div>
 
-      <LiveTicker event={LIVE_EVENTS[tickerIdx]} idx={tickerIdx} />
+      {liveEvents.length > 0 && <LiveTicker event={liveEvents[tickerIdx]} idx={tickerIdx} />}
 
       {phase !== "idle" && (
         <RevealOverlay phase={phase} reveals={reveals} pack={pack} onClose={closeReveal} />
