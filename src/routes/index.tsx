@@ -234,14 +234,10 @@ function buildDiscoveries(packId: string): Discovery[] {
   return items;
 }
 
-const LIVE_EVENTS = [
-  { user: "Ada", text: "discovered", accent: "2.50 USDM", from: "Mystery Pack" },
-  { user: "David", text: "unlocked", accent: "a Rare Card", from: "Alpha Pack" },
-  { user: "Sarah", text: "found", accent: "a MiniPay Fact", from: "Starter Pack" },
-  { user: "Michael", text: "completed", accent: "a Collection", from: "Legendary Pack" },
-  { user: "Lin", text: "discovered", accent: "5.00 USDM", from: "Explorer Pack" },
-  { user: "Kwame", text: "unlocked", accent: "a Legendary Card", from: "Legendary Pack" },
-];
+// Live event feed — populated from real activity (Supabase realtime).
+// Starts empty; entries are prepended as they arrive.
+type LiveEvent = { user: string; text: string; accent: string; from: string };
+const LIVE_EVENTS_SEED: LiveEvent[] = [];
 
 const AVATAR_GRADIENTS = [
   "linear-gradient(135deg,#4ade80,#22c55e)",
