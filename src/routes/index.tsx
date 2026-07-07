@@ -14,10 +14,10 @@ import {
   PAYMENT_ABI, ERC20_ABI, CELO_CHAIN_ID,
   USERNAME_CONTRACT, USERNAME_ABI,
 } from "@/lib/contracts";
-import onboarding1 from "@/assets/onboarding/onboarding-1.png.asset.json";
-import onboarding2 from "@/assets/onboarding/onboarding-2.png.asset.json";
-import onboarding3 from "@/assets/onboarding/onboarding-3.png.asset.json";
-import onboarding4 from "@/assets/onboarding/onboarding-4.png.asset.json";
+const onboarding1 = { url: "/onboarding/onboarding-1.png" };
+const onboarding2 = { url: "/onboarding/onboarding-2.png" };
+const onboarding3 = { url: "/onboarding/onboarding-3.png" };
+const onboarding4 = { url: "/onboarding/onboarding-4.png" };
 
 // Asset maps: sealed + shredded packs, discovery images, collectible cards
 const PACK_IMG: Record<string, string> = {
