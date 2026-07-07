@@ -373,8 +373,18 @@ function HomeScreen() {
     setTimeout(() => {
       setPhase("revealing");
       setCollection((c) => [...items, ...c].slice(0, 60));
+      // Announce the top discovery in the live ticker.
+      const top = items.find((i) => i.kind === "USDM") ?? items[0];
+      const label = username ?? (wallet.address ? shortAddr(wallet.address) : "Shredder");
+      setLiveEvents((prev) => [{
+        user: label,
+        text: top.kind === "USDM" ? "discovered" : top.kind === "CARD" ? "unlocked" : "found",
+        accent: top.title,
+        from: pack.name,
+      }, ...prev].slice(0, 20));
+      setTickerIdx(0);
     }, 1700);
-  }, [phase, pack.id]);
+  }, [phase, pack.id, pack.name, username, wallet.address]);
 
   const startShredInner = useCallback(async () => {
     // If paid and not yet purchased, buy first
