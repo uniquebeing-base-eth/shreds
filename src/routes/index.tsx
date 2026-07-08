@@ -313,13 +313,18 @@ function HomeScreen() {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [purchased, setPurchased] = useState<Set<string>>(new Set(["starter"]));
   const [buying, setBuying] = useState(false);
   const [buyError, setBuyError] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>(LIVE_EVENTS_SEED);
+  const [packStats, setPackStats] = useState<Record<string, { owners: number; shreds: number; drops: number }>>({});
+  const [globalStats, setGlobalStats] = useState<{ shredders: number; packs_shredded: number; discoveries: number; rewards_usdm: number }>({ shredders: 0, packs_shredded: 0, discoveries: 0, rewards_usdm: 0 });
   const wallet = useWallet();
+  const callAnnounce = useServerFn(announceShred);
+  const callDistribute = useServerFn(distributeReward);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -335,6 +340,13 @@ function HomeScreen() {
         await mod.sdk.actions.ready();
       } catch { /* not running inside a Farcaster host — safe to ignore */ }
     })();
+    // Warm image cache so packs & discoveries render instantly on first shred.
+    const warm = [
+      ...Object.values(PACK_IMG), ...Object.values(SHREDDED_IMG),
+      ...Object.values(DISCOVERY_IMG), ...Object.values(CARD_LIBRARY),
+      ...ONBOARDING_SLIDES,
+    ];
+    warm.forEach((src) => { const img = new Image(); img.src = src; });
   }, []);
 
   // Auto-detect existing on-chain username whenever wallet connects
@@ -349,10 +361,53 @@ function HomeScreen() {
     return () => { cancelled = true; };
   }, [wallet.address]);
 
+  // Load stats + live feed and subscribe to realtime.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [{ data: ps }, { data: gs }, { data: lf }] = await Promise.all([
+        supabase.from("pack_stats").select("pack_id,owners,shreds,drops"),
+        supabase.from("global_stats").select("shredders,packs_shredded,discoveries,rewards_usdm").eq("id", 1).maybeSingle(),
+        supabase.from("live_feed").select("username,wallet,pack_id,kind,text,amount").order("created_at", { ascending: false }).limit(30),
+      ]);
+      if (cancelled) return;
+      if (ps) {
+        const map: Record<string, { owners: number; shreds: number; drops: number }> = {};
+        ps.forEach((r) => { map[r.pack_id] = { owners: r.owners, shreds: r.shreds, drops: r.drops }; });
+        setPackStats(map);
+      }
+      if (gs) setGlobalStats({ shredders: gs.shredders, packs_shredded: gs.packs_shredded, discoveries: gs.discoveries, rewards_usdm: Number(gs.rewards_usdm) });
+      if (lf) {
+        setLiveEvents(lf.map((r) => feedRowToEvent(r)).reverse().reverse()); // newest first
+      }
+    })();
+
+    const ch = supabase
+      .channel("shreds-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "pack_stats" }, (payload) => {
+        const r = payload.new as { pack_id: string; owners: number; shreds: number; drops: number };
+        setPackStats((prev) => ({ ...prev, [r.pack_id]: { owners: r.owners, shreds: r.shreds, drops: r.drops } }));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "global_stats" }, (payload) => {
+        const r = payload.new as { shredders: number; packs_shredded: number; discoveries: number; rewards_usdm: number | string };
+        setGlobalStats({ shredders: r.shredders, packs_shredded: r.packs_shredded, discoveries: r.discoveries, rewards_usdm: Number(r.rewards_usdm) });
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_feed" }, (payload) => {
+        const r = payload.new as FeedRow;
+        setLiveEvents((prev) => [feedRowToEvent(r), ...prev].slice(0, 30));
+        setTickerIdx(0);
+      })
+      .subscribe();
+
+    return () => { cancelled = true; void supabase.removeChannel(ch); };
+  }, []);
+
   const finishOnboarding = () => {
     try { localStorage.setItem("shreds_onboarded", "1"); } catch { /* noop */ }
     setShowOnboarding(false);
   };
+
+  const replayOnboarding = () => { setShowHelp(false); setShowOnboarding(true); };
 
   const onUsernameRegistered = (name: string) => {
     try { localStorage.setItem("shreds_username", name); } catch { /* noop */ }
@@ -380,24 +435,37 @@ function HomeScreen() {
     audio.duckTheme();
     audio.playShred();
     setPhase("slashing");
-    // After 700ms, show the shredded pack
     setTimeout(() => setPhase("shredded"), 700);
-    // After the shred sound (~1s), reveal discoveries
     setTimeout(() => {
       setPhase("revealing");
       setCollection((c) => [...items, ...c].slice(0, 60));
-      // Announce the top discovery in the live ticker.
-      const top = items.find((i) => i.kind === "USDM") ?? items[0];
+
+      // Announce to backend (updates stats + inserts live feed rows).
+      const feedItems = items.map((i) => ({
+        kind: i.kind,
+        title: i.title,
+        amount: i.amountRaw,
+      }));
       const label = username ?? (wallet.address ? shortAddr(wallet.address) : "Shredder");
-      setLiveEvents((prev) => [{
-        user: label,
-        text: top.kind === "USDM" ? "discovered" : top.kind === "CARD" ? "unlocked" : "found",
-        accent: top.title,
-        from: pack.name,
-      }, ...prev].slice(0, 20));
-      setTickerIdx(0);
+      void callAnnounce({ data: {
+        packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer",
+        wallet: wallet.address ?? null,
+        username: label,
+        items: feedItems,
+      } }).catch(() => { /* non-fatal */ });
+
+      // Automatically transfer USDM reward from the rewarder wallet.
+      const usdmItem = items.find((i) => i.kind === "USDM");
+      if (usdmItem && wallet.address && (usdmItem.amountRaw ?? 0) > 0) {
+        void callDistribute({ data: {
+          wallet: wallet.address,
+          packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer",
+          amountUsdm: usdmItem.amountRaw,
+          nonce: `${wallet.address.toLowerCase()}-${Date.now()}`,
+        } }).catch(() => { /* non-fatal — user still keeps stats */ });
+      }
     }, 1700);
-  }, [phase, pack.id, pack.name, username, wallet.address]);
+  }, [phase, pack.id, pack.name, username, wallet.address, callAnnounce, callDistribute]);
 
   const startShredInner = useCallback(async () => {
     // If paid and not yet purchased, buy first
