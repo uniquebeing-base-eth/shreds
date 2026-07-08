@@ -243,6 +243,17 @@ function buildDiscoveries(packId: string): Discovery[] {
 type LiveEvent = { user: string; text: string; accent: string; from: string };
 const LIVE_EVENTS_SEED: LiveEvent[] = [];
 
+type FeedRow = { username: string; wallet: string | null; pack_id: string | null; kind: string; text: string; amount: number | string | null };
+function feedRowToEvent(r: FeedRow): LiveEvent {
+  const [verb, ...rest] = r.text.split(" ");
+  return {
+    user: r.username,
+    text: verb || "shredded",
+    accent: rest.join(" ") || r.kind,
+    from: r.pack_id ?? "Shreds",
+  };
+}
+
 const AVATAR_GRADIENTS = [
   "linear-gradient(135deg,#4ade80,#22c55e)",
   "linear-gradient(135deg,#a78bfa,#7c3aed)",
