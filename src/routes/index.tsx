@@ -3,12 +3,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Trophy, User, Users, Package, Gem, Wallet, Flame, Gift, Star,
   Lightbulb, X, ChevronLeft, ChevronRight, Award, Zap,
-  ArrowRight, AlertTriangle, Check, Loader2,
+  ArrowRight, AlertTriangle, Check, Loader2, HelpCircle, ExternalLink,
 } from "lucide-react";
 import { BackgroundMusic } from "@/components/BackgroundMusic";
+import { useServerFn } from "@tanstack/react-start";
 import { useWallet, shortAddr } from "@/lib/wallet";
 import { audio } from "@/lib/audio";
 import { rollUsdm, formatUsdm } from "@/lib/rewards";
+import { supabase } from "@/integrations/supabase/client";
+import { announceShred } from "@/lib/announce-shred.functions";
+import { distributeReward } from "@/lib/distribute-reward.functions";
 import {
   PACK_KEY, PACK_PRICE_USDM, USDM_ADDRESS, PAYMENT_CONTRACT,
   PAYMENT_ABI, ERC20_ABI, CELO_CHAIN_ID,
