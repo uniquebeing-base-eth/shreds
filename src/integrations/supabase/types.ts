@@ -50,6 +50,66 @@ export type Database = {
         }
         Relationships: []
       }
+      global_stats: {
+        Row: {
+          discoveries: number
+          id: number
+          packs_shredded: number
+          rewards_usdm: number
+          shredders: number
+          updated_at: string
+        }
+        Insert: {
+          discoveries?: number
+          id?: number
+          packs_shredded?: number
+          rewards_usdm?: number
+          shredders?: number
+          updated_at?: string
+        }
+        Update: {
+          discoveries?: number
+          id?: number
+          packs_shredded?: number
+          rewards_usdm?: number
+          shredders?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      live_feed: {
+        Row: {
+          amount: number | null
+          created_at: string
+          id: string
+          kind: string
+          pack_id: string | null
+          text: string
+          username: string
+          wallet: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          id?: string
+          kind: string
+          pack_id?: string | null
+          text: string
+          username: string
+          wallet?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          id?: string
+          kind?: string
+          pack_id?: string | null
+          text?: string
+          username?: string
+          wallet?: string | null
+        }
+        Relationships: []
+      }
       pack_purchases: {
         Row: {
           created_at: string
@@ -77,6 +137,30 @@ export type Database = {
           price_usdm?: number
           tx_hash?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      pack_stats: {
+        Row: {
+          drops: number
+          owners: number
+          pack_id: string
+          shreds: number
+          updated_at: string
+        }
+        Insert: {
+          drops?: number
+          owners?: number
+          pack_id: string
+          shreds?: number
+          updated_at?: string
+        }
+        Update: {
+          drops?: number
+          owners?: number
+          pack_id?: string
+          shreds?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -157,6 +241,16 @@ export type Database = {
       }
     }
     Functions: {
+      apply_shred: {
+        Args: {
+          _drops: number
+          _is_new_owner: boolean
+          _is_new_shredder: boolean
+          _pack_id: string
+          _rewards_usdm: number
+        }
+        Returns: undefined
+      }
       increment_shred_stats: {
         Args: { _pack: string; _user: string; _xp: number }
         Returns: undefined
