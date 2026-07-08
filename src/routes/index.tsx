@@ -3,12 +3,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Trophy, User, Users, Package, Gem, Wallet, Flame, Gift, Star,
   Lightbulb, X, ChevronLeft, ChevronRight, Award, Zap,
-  ArrowRight, AlertTriangle, Check, Loader2,
+  ArrowRight, AlertTriangle, Check, Loader2, HelpCircle, ExternalLink,
 } from "lucide-react";
 import { BackgroundMusic } from "@/components/BackgroundMusic";
+import { useServerFn } from "@tanstack/react-start";
 import { useWallet, shortAddr } from "@/lib/wallet";
 import { audio } from "@/lib/audio";
 import { rollUsdm, formatUsdm } from "@/lib/rewards";
+import { supabase } from "@/integrations/supabase/client";
+import { announceShred } from "@/lib/announce-shred.functions";
+import { distributeReward } from "@/lib/distribute-reward.functions";
 import {
   PACK_KEY, PACK_PRICE_USDM, USDM_ADDRESS, PAYMENT_CONTRACT,
   PAYMENT_ABI, ERC20_ABI, CELO_CHAIN_ID,
@@ -203,6 +207,12 @@ const CARDS: Discovery[] = [
 ];
 
 function pickRandom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+function fmtNum(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
+  if (Number.isInteger(n)) return n.toString();
+  return n < 1 ? n.toFixed(2) : n.toFixed(2);
+}
 
 function buildDiscoveries(packId: string): Discovery[] {
   const items: Discovery[] = [];
@@ -238,6 +248,17 @@ function buildDiscoveries(packId: string): Discovery[] {
 // Starts empty; entries are prepended as they arrive.
 type LiveEvent = { user: string; text: string; accent: string; from: string };
 const LIVE_EVENTS_SEED: LiveEvent[] = [];
+
+type FeedRow = { username: string; wallet: string | null; pack_id: string | null; kind: string; text: string; amount: number | string | null };
+function feedRowToEvent(r: FeedRow): LiveEvent {
+  const [verb, ...rest] = r.text.split(" ");
+  return {
+    user: r.username,
+    text: verb || "shredded",
+    accent: rest.join(" ") || r.kind,
+    from: r.pack_id ?? "Shreds",
+  };
+}
 
 const AVATAR_GRADIENTS = [
   "linear-gradient(135deg,#4ade80,#22c55e)",
@@ -309,13 +330,18 @@ function HomeScreen() {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [purchased, setPurchased] = useState<Set<string>>(new Set(["starter"]));
   const [buying, setBuying] = useState(false);
   const [buyError, setBuyError] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>(LIVE_EVENTS_SEED);
+  const [packStats, setPackStats] = useState<Record<string, { owners: number; shreds: number; drops: number }>>({});
+  const [globalStats, setGlobalStats] = useState<{ shredders: number; packs_shredded: number; discoveries: number; rewards_usdm: number }>({ shredders: 0, packs_shredded: 0, discoveries: 0, rewards_usdm: 0 });
   const wallet = useWallet();
+  const callAnnounce = useServerFn(announceShred);
+  const callDistribute = useServerFn(distributeReward);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -331,6 +357,13 @@ function HomeScreen() {
         await mod.sdk.actions.ready();
       } catch { /* not running inside a Farcaster host — safe to ignore */ }
     })();
+    // Warm image cache so packs & discoveries render instantly on first shred.
+    const warm = [
+      ...Object.values(PACK_IMG), ...Object.values(SHREDDED_IMG),
+      ...Object.values(DISCOVERY_IMG), ...Object.values(CARD_LIBRARY),
+      ...ONBOARDING_SLIDES,
+    ];
+    warm.forEach((src) => { const img = new Image(); img.src = src; });
   }, []);
 
   // Auto-detect existing on-chain username whenever wallet connects
@@ -345,10 +378,53 @@ function HomeScreen() {
     return () => { cancelled = true; };
   }, [wallet.address]);
 
+  // Load stats + live feed and subscribe to realtime.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [{ data: ps }, { data: gs }, { data: lf }] = await Promise.all([
+        supabase.from("pack_stats").select("pack_id,owners,shreds,drops"),
+        supabase.from("global_stats").select("shredders,packs_shredded,discoveries,rewards_usdm").eq("id", 1).maybeSingle(),
+        supabase.from("live_feed").select("username,wallet,pack_id,kind,text,amount").order("created_at", { ascending: false }).limit(30),
+      ]);
+      if (cancelled) return;
+      if (ps) {
+        const map: Record<string, { owners: number; shreds: number; drops: number }> = {};
+        ps.forEach((r) => { map[r.pack_id] = { owners: r.owners, shreds: r.shreds, drops: r.drops }; });
+        setPackStats(map);
+      }
+      if (gs) setGlobalStats({ shredders: gs.shredders, packs_shredded: gs.packs_shredded, discoveries: gs.discoveries, rewards_usdm: Number(gs.rewards_usdm) });
+      if (lf) {
+        setLiveEvents(lf.map((r) => feedRowToEvent(r)).reverse().reverse()); // newest first
+      }
+    })();
+
+    const ch = supabase
+      .channel("shreds-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "pack_stats" }, (payload) => {
+        const r = payload.new as { pack_id: string; owners: number; shreds: number; drops: number };
+        setPackStats((prev) => ({ ...prev, [r.pack_id]: { owners: r.owners, shreds: r.shreds, drops: r.drops } }));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "global_stats" }, (payload) => {
+        const r = payload.new as { shredders: number; packs_shredded: number; discoveries: number; rewards_usdm: number | string };
+        setGlobalStats({ shredders: r.shredders, packs_shredded: r.packs_shredded, discoveries: r.discoveries, rewards_usdm: Number(r.rewards_usdm) });
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_feed" }, (payload) => {
+        const r = payload.new as FeedRow;
+        setLiveEvents((prev) => [feedRowToEvent(r), ...prev].slice(0, 30));
+        setTickerIdx(0);
+      })
+      .subscribe();
+
+    return () => { cancelled = true; void supabase.removeChannel(ch); };
+  }, []);
+
   const finishOnboarding = () => {
     try { localStorage.setItem("shreds_onboarded", "1"); } catch { /* noop */ }
     setShowOnboarding(false);
   };
+
+  const replayOnboarding = () => { setShowHelp(false); setShowOnboarding(true); };
 
   const onUsernameRegistered = (name: string) => {
     try { localStorage.setItem("shreds_username", name); } catch { /* noop */ }
@@ -376,24 +452,37 @@ function HomeScreen() {
     audio.duckTheme();
     audio.playShred();
     setPhase("slashing");
-    // After 700ms, show the shredded pack
     setTimeout(() => setPhase("shredded"), 700);
-    // After the shred sound (~1s), reveal discoveries
     setTimeout(() => {
       setPhase("revealing");
       setCollection((c) => [...items, ...c].slice(0, 60));
-      // Announce the top discovery in the live ticker.
-      const top = items.find((i) => i.kind === "USDM") ?? items[0];
+
+      // Announce to backend (updates stats + inserts live feed rows).
+      const feedItems = items.map((i) => ({
+        kind: i.kind,
+        title: i.title,
+        amount: i.amountRaw,
+      }));
       const label = username ?? (wallet.address ? shortAddr(wallet.address) : "Shredder");
-      setLiveEvents((prev) => [{
-        user: label,
-        text: top.kind === "USDM" ? "discovered" : top.kind === "CARD" ? "unlocked" : "found",
-        accent: top.title,
-        from: pack.name,
-      }, ...prev].slice(0, 20));
-      setTickerIdx(0);
+      void callAnnounce({ data: {
+        packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer",
+        wallet: wallet.address ?? null,
+        username: label,
+        items: feedItems,
+      } }).catch(() => { /* non-fatal */ });
+
+      // Automatically transfer USDM reward from the rewarder wallet.
+      const usdmItem = items.find((i) => i.kind === "USDM");
+      if (usdmItem && wallet.address && (usdmItem.amountRaw ?? 0) > 0) {
+        void callDistribute({ data: {
+          wallet: wallet.address,
+          packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer",
+          amountUsdm: usdmItem.amountRaw,
+          nonce: `${wallet.address.toLowerCase()}-${Date.now()}`,
+        } }).catch(() => { /* non-fatal — user still keeps stats */ });
+      }
     }, 1700);
-  }, [phase, pack.id, pack.name, username, wallet.address]);
+  }, [phase, pack.id, pack.name, username, wallet.address, callAnnounce, callDistribute]);
 
   const startShredInner = useCallback(async () => {
     // If paid and not yet purchased, buy first
@@ -403,8 +492,13 @@ function HomeScreen() {
         return;
       }
       if (wallet.chainId !== CELO_CHAIN_ID) {
-        setBuyError("Please switch to Celo network.");
-        return;
+        setBuyError("Switching to Celo network…");
+        const acct = await wallet.connect();
+        if (!acct || wallet.chainId !== CELO_CHAIN_ID) {
+          setBuyError("Please switch your wallet to the Celo network to continue.");
+          return;
+        }
+        setBuyError(null);
       }
       setBuying(true); setBuyError(null);
       try {
@@ -440,17 +534,29 @@ function HomeScreen() {
     <div className="min-h-dvh w-full text-foreground pb-20">
       <div className="mx-auto w-full max-w-md px-3 pt-3">
         {/* Header */}
-        <header className="grid grid-cols-[40px_1fr_88px] items-center gap-2">
-          <button
-            onClick={() => setShowLeaderboard(true)}
-            className="flex flex-col items-center gap-0.5 group"
-            aria-label="Leaderboard"
-          >
-            <div className="icon-tile w-9 h-9 rounded-lg flex items-center justify-center group-active:scale-95 transition">
-              <Trophy className="w-4 h-4 text-[color:var(--gold)]" />
-            </div>
-            <span className="text-[7px] font-semibold tracking-[0.16em] text-muted-foreground">LEADER</span>
-          </button>
+        <header className="grid grid-cols-[68px_1fr_88px] items-center gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowLeaderboard(true)}
+              className="flex flex-col items-center gap-0.5 group"
+              aria-label="Leaderboard"
+            >
+              <div className="icon-tile w-9 h-9 rounded-lg flex items-center justify-center group-active:scale-95 transition">
+                <Trophy className="w-4 h-4 text-[color:var(--gold)]" />
+              </div>
+              <span className="text-[7px] font-semibold tracking-[0.16em] text-muted-foreground">LEADER</span>
+            </button>
+            <button
+              onClick={() => setShowHelp(true)}
+              className="flex flex-col items-center gap-0.5 group"
+              aria-label="Help & FAQ"
+            >
+              <div className="icon-tile w-9 h-9 rounded-lg flex items-center justify-center group-active:scale-95 transition">
+                <HelpCircle className="w-4 h-4 text-shred" />
+              </div>
+              <span className="text-[7px] font-semibold tracking-[0.16em] text-muted-foreground">HELP</span>
+            </button>
+          </div>
 
           <div className="flex flex-col items-center justify-center min-w-0 gap-0.5">
             <img
@@ -485,12 +591,12 @@ function HomeScreen() {
           </div>
         </header>
 
-        {/* Stats row — live counters (start at 0 until on-chain data is indexed) */}
+        {/* Stats row — live production counters */}
         <div className="mt-2 stat-card rounded-lg px-1.5 py-1 grid grid-cols-4 gap-0.5">
-          <StatCompact icon={<Users className="w-3 h-3 text-shred" />} value="0" label="SHREDDERS" />
-          <StatCompact icon={<Package className="w-3 h-3 text-[color:oklch(0.7_0.18_240)]" />} value="0" label="SHREDDED" />
-          <StatCompact icon={<Gem className="w-3 h-3 text-[color:var(--royal)]" />} value="0" label="DISCOVER" />
-          <StatCompact icon={<Wallet className="w-3 h-3 text-[color:var(--gold)]" />} value="$0" label="REWARDS" />
+          <StatCompact icon={<Users className="w-3 h-3 text-shred" />} value={fmtNum(globalStats.shredders)} label="SHREDDERS" />
+          <StatCompact icon={<Package className="w-3 h-3 text-[color:oklch(0.7_0.18_240)]" />} value={fmtNum(globalStats.packs_shredded)} label="SHREDDED" />
+          <StatCompact icon={<Gem className="w-3 h-3 text-[color:var(--royal)]" />} value={fmtNum(globalStats.discoveries)} label="DISCOVER" />
+          <StatCompact icon={<Wallet className="w-3 h-3 text-[color:var(--gold)]" />} value={`$${fmtNum(globalStats.rewards_usdm)}`} label="REWARDS" />
         </div>
 
         {/* Pack carousel */}
@@ -504,13 +610,14 @@ function HomeScreen() {
           needsPurchase={pack.priceNum > 0 && !purchased.has(pack.id)}
         />
 
-        {/* Pack details */}
+        {/* Pack details — live per-pack counters */}
         <div className="mt-2 grid grid-cols-4 gap-1">
           <MiniStat Icon={Star} value={pack.price} label="PRICE" tint="oklch(0.88 0.28 135)" />
-          <MiniStat Icon={Users} value={pack.owners} label="OWNERS" tint="oklch(0.7 0.2 145)" />
-          <MiniStat Icon={Flame} value={pack.shreddedCnt} label="SHRED" tint="oklch(0.75 0.2 45)" />
-          <MiniStat Icon={Gift} value={pack.discoveries} label="DROPS" tint="oklch(0.68 0.22 300)" />
+          <MiniStat Icon={Users} value={fmtNum(packStats[pack.id]?.owners ?? 0)} label="OWNERS" tint="oklch(0.7 0.2 145)" />
+          <MiniStat Icon={Flame} value={fmtNum(packStats[pack.id]?.shreds ?? 0)} label="SHREDS" tint="oklch(0.75 0.2 45)" />
+          <MiniStat Icon={Gift} value={fmtNum(packStats[pack.id]?.drops ?? 0)} label="DROPS" tint="oklch(0.68 0.22 300)" />
         </div>
+
 
         {/* Dots */}
         <div className="mt-3 flex items-center justify-center gap-2">
@@ -573,6 +680,7 @@ function HomeScreen() {
         />
       )}
       {showOnboarding && <OnboardingOverlay onDone={finishOnboarding} />}
+      {showHelp && <HelpSheet onClose={() => setShowHelp(false)} onReplay={replayOnboarding} />}
       {showUsernameModal && (
         <UsernameModal
           walletAddress={wallet.address}
@@ -1217,4 +1325,74 @@ function UsernameModal({
     </div>
   );
 }
+
+/* -------------------- Help & FAQ Sheet -------------------- */
+
+const FAQ_ITEMS: { q: string; a: string }[] = [
+  { q: "What is Shreds?", a: "Shreds is a mini app on Celo where you shred digital packs to discover USDM rewards, rare collection cards, XP and facts about MiniPay & Celo." },
+  { q: "How do I shred a pack?", a: "Pick a pack, then swipe diagonally across it. Paid packs charge USDM through your wallet first, then reveal your discoveries." },
+  { q: "How do rewards work?", a: "Every shred rolls a USDM reward from a weighted table sized to the pack tier. Rewards are sent from the Shreds rewarder wallet to your wallet automatically after the reveal." },
+  { q: "Why do I need a username?", a: "Usernames are registered on-chain so your discoveries and leaderboard rank stay yours across sessions and devices." },
+  { q: "How often can I open the free Starter Pack?", a: "The Starter Pack is free to shred and available any time to help you learn how discoveries work." },
+  { q: "Which wallets are supported?", a: "MiniPay, Farcaster's built-in wallet, and any Celo-compatible browser wallet (e.g. MetaMask on Celo)." },
+  { q: "Are rewards sent automatically?", a: "Yes. As soon as a shred generates a USDM discovery, the rewarder sends the amount to your wallet — you never have to claim manually." },
+];
+
+const SOCIAL_LINKS = [
+  { label: "Official X", href: "https://x.com/shreds_x" },
+  { label: "Telegram Channel", href: "https://t.me/shredsofficial" },
+  { label: "Telegram Community", href: "https://t.me/+E2XQlL0xko82ZjZk" },
+  { label: "Email Support", href: "mailto:shreds@signalify.xyz" },
+];
+
+function HelpSheet({ onClose, onReplay }: { onClose: () => void; onReplay: () => void }) {
+  const [open, setOpen] = useState<number | null>(0);
+  return (
+    <Sheet title="Help & FAQ" onClose={onClose} Icon={HelpCircle}>
+      <button
+        onClick={onReplay}
+        className="w-full py-3 rounded-2xl bg-shred text-primary-foreground font-bold text-xs tracking-widest glow-shred active:scale-[0.98] flex items-center justify-center gap-2 mb-4"
+      >
+        <ArrowRight className="w-4 h-4" /> REPLAY TUTORIAL
+      </button>
+
+      <div className="space-y-1.5 mb-5">
+        {FAQ_ITEMS.map((it, i) => (
+          <div key={i} className="stat-card rounded-xl overflow-hidden">
+            <button
+              onClick={() => setOpen(open === i ? null : i)}
+              className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left"
+            >
+              <span className="font-bold text-xs">{it.q}</span>
+              <span className="text-shred text-lg leading-none shrink-0">{open === i ? "−" : "+"}</span>
+            </button>
+            {open === i && (
+              <div className="px-3 pb-3 text-[11px] leading-relaxed text-muted-foreground">{it.a}</div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground mb-2">CONNECT WITH US</div>
+      <div className="grid grid-cols-2 gap-2">
+        {SOCIAL_LINKS.map((s) => (
+          <a
+            key={s.href}
+            href={s.href}
+            target="_blank"
+            rel="noreferrer"
+            className="stat-card rounded-xl px-3 py-2.5 flex items-center gap-2 active:scale-[0.98] transition"
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-shred shrink-0" />
+            <span className="text-[11px] font-bold truncate">{s.label}</span>
+          </a>
+        ))}
+      </div>
+      <div className="mt-4 text-center text-[10px] text-muted-foreground">
+        Built on Celo · Powered by MiniPay & Farcaster
+      </div>
+    </Sheet>
+  );
+}
+
 

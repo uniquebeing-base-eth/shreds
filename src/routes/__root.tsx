@@ -130,6 +130,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" },
+      // Preload pack + wordmark so home screen paints without pop-in.
+      { rel: "preload", as: "image", href: "/shreds-wordmark.png" },
+      { rel: "preload", as: "image", href: "/packs/starter.png" },
+      { rel: "preload", as: "image", href: "/packs/mystery.png" },
+      { rel: "preload", as: "image", href: "/packs/alpha.png" },
+      { rel: "preload", as: "image", href: "/packs/legendary.png" },
+      { rel: "preload", as: "image", href: "/packs/explorer.png" },
     ],
   }),
   shellComponent: RootShell,
