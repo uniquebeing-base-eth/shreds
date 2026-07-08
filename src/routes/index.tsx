@@ -523,17 +523,29 @@ function HomeScreen() {
     <div className="min-h-dvh w-full text-foreground pb-20">
       <div className="mx-auto w-full max-w-md px-3 pt-3">
         {/* Header */}
-        <header className="grid grid-cols-[40px_1fr_88px] items-center gap-2">
-          <button
-            onClick={() => setShowLeaderboard(true)}
-            className="flex flex-col items-center gap-0.5 group"
-            aria-label="Leaderboard"
-          >
-            <div className="icon-tile w-9 h-9 rounded-lg flex items-center justify-center group-active:scale-95 transition">
-              <Trophy className="w-4 h-4 text-[color:var(--gold)]" />
-            </div>
-            <span className="text-[7px] font-semibold tracking-[0.16em] text-muted-foreground">LEADER</span>
-          </button>
+        <header className="grid grid-cols-[68px_1fr_88px] items-center gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowLeaderboard(true)}
+              className="flex flex-col items-center gap-0.5 group"
+              aria-label="Leaderboard"
+            >
+              <div className="icon-tile w-9 h-9 rounded-lg flex items-center justify-center group-active:scale-95 transition">
+                <Trophy className="w-4 h-4 text-[color:var(--gold)]" />
+              </div>
+              <span className="text-[7px] font-semibold tracking-[0.16em] text-muted-foreground">LEADER</span>
+            </button>
+            <button
+              onClick={() => setShowHelp(true)}
+              className="flex flex-col items-center gap-0.5 group"
+              aria-label="Help & FAQ"
+            >
+              <div className="icon-tile w-9 h-9 rounded-lg flex items-center justify-center group-active:scale-95 transition">
+                <HelpCircle className="w-4 h-4 text-shred" />
+              </div>
+              <span className="text-[7px] font-semibold tracking-[0.16em] text-muted-foreground">HELP</span>
+            </button>
+          </div>
 
           <div className="flex flex-col items-center justify-center min-w-0 gap-0.5">
             <img
@@ -568,12 +580,12 @@ function HomeScreen() {
           </div>
         </header>
 
-        {/* Stats row — live counters (start at 0 until on-chain data is indexed) */}
+        {/* Stats row — live production counters */}
         <div className="mt-2 stat-card rounded-lg px-1.5 py-1 grid grid-cols-4 gap-0.5">
-          <StatCompact icon={<Users className="w-3 h-3 text-shred" />} value="0" label="SHREDDERS" />
-          <StatCompact icon={<Package className="w-3 h-3 text-[color:oklch(0.7_0.18_240)]" />} value="0" label="SHREDDED" />
-          <StatCompact icon={<Gem className="w-3 h-3 text-[color:var(--royal)]" />} value="0" label="DISCOVER" />
-          <StatCompact icon={<Wallet className="w-3 h-3 text-[color:var(--gold)]" />} value="$0" label="REWARDS" />
+          <StatCompact icon={<Users className="w-3 h-3 text-shred" />} value={fmtNum(globalStats.shredders)} label="SHREDDERS" />
+          <StatCompact icon={<Package className="w-3 h-3 text-[color:oklch(0.7_0.18_240)]" />} value={fmtNum(globalStats.packs_shredded)} label="SHREDDED" />
+          <StatCompact icon={<Gem className="w-3 h-3 text-[color:var(--royal)]" />} value={fmtNum(globalStats.discoveries)} label="DISCOVER" />
+          <StatCompact icon={<Wallet className="w-3 h-3 text-[color:var(--gold)]" />} value={`$${fmtNum(globalStats.rewards_usdm)}`} label="REWARDS" />
         </div>
 
         {/* Pack carousel */}
@@ -587,13 +599,14 @@ function HomeScreen() {
           needsPurchase={pack.priceNum > 0 && !purchased.has(pack.id)}
         />
 
-        {/* Pack details */}
+        {/* Pack details — live per-pack counters */}
         <div className="mt-2 grid grid-cols-4 gap-1">
           <MiniStat Icon={Star} value={pack.price} label="PRICE" tint="oklch(0.88 0.28 135)" />
-          <MiniStat Icon={Users} value={pack.owners} label="OWNERS" tint="oklch(0.7 0.2 145)" />
-          <MiniStat Icon={Flame} value={pack.shreddedCnt} label="SHRED" tint="oklch(0.75 0.2 45)" />
-          <MiniStat Icon={Gift} value={pack.discoveries} label="DROPS" tint="oklch(0.68 0.22 300)" />
+          <MiniStat Icon={Users} value={fmtNum(packStats[pack.id]?.owners ?? 0)} label="OWNERS" tint="oklch(0.7 0.2 145)" />
+          <MiniStat Icon={Flame} value={fmtNum(packStats[pack.id]?.shreds ?? 0)} label="SHREDS" tint="oklch(0.75 0.2 45)" />
+          <MiniStat Icon={Gift} value={fmtNum(packStats[pack.id]?.drops ?? 0)} label="DROPS" tint="oklch(0.68 0.22 300)" />
         </div>
+
 
         {/* Dots */}
         <div className="mt-3 flex items-center justify-center gap-2">
