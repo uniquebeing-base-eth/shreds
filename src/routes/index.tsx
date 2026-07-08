@@ -13,6 +13,7 @@ import { rollUsdm, formatUsdm } from "@/lib/rewards";
 import { supabase } from "@/integrations/supabase/client";
 import { announceShred } from "@/lib/announce-shred.functions";
 import { distributeReward } from "@/lib/distribute-reward.functions";
+import { walletToProfileId } from "@/lib/profile";
 import {
   PACK_KEY, PACK_PRICE_USDM, USDM_ADDRESS, PAYMENT_CONTRACT,
   PAYMENT_ABI, ERC20_ABI, CELO_CHAIN_ID,
@@ -246,8 +247,13 @@ function buildDiscoveries(packId: string): Discovery[] {
 
 // Live event feed — populated from real activity (Supabase realtime).
 // Starts empty; entries are prepended as they arrive.
-type LiveEvent = { user: string; text: string; accent: string; from: string };
+type LiveEvent = { user: string; text: string; accent: string; from: string; kind?: string; amount?: number | string | null; wallet?: string | null };
+type LeaderboardEntry = { user: string; wallet: string | null; xp: number; packsShredded: number; shreds: number; rank: number };
+type ProfileSummary = { username: string | null; wallet: string | null; xp: number; packsShredded: number; cards: number; facts: number; rewards: number; collection: Discovery[] };
 const LIVE_EVENTS_SEED: LiveEvent[] = [];
+const STARTER_COOLDOWN_MS = 12 * 60 * 60 * 1000;
+const STARTER_COOLDOWN_KEY = "shreds_starter_cd_until";
+const PROFILE_STORAGE_PREFIX = "shreds_profile";
 
 type FeedRow = { username: string; wallet: string | null; pack_id: string | null; kind: string; text: string; amount: number | string | null };
 function feedRowToEvent(r: FeedRow): LiveEvent {
@@ -257,7 +263,92 @@ function feedRowToEvent(r: FeedRow): LiveEvent {
     text: verb || "shredded",
     accent: rest.join(" ") || r.kind,
     from: r.pack_id ?? "Shreds",
+    kind: r.kind,
+    amount: r.amount,
+    wallet: r.wallet,
   };
+}
+
+function createEmptyProfileSummary(username: string | null, wallet: string | null): ProfileSummary {
+  return { username, wallet, xp: 0, packsShredded: 0, cards: 0, facts: 0, rewards: 0, collection: [] };
+}
+
+function deriveProfileSummary(collection: Discovery[], username: string | null, wallet: string | null, packsShredded: number): ProfileSummary {
+  const cards = collection.filter((c) => c.kind === "CARD").length;
+  const facts = collection.filter((c) => c.kind === "FACT").length;
+  const rewards = collection.filter((c) => c.kind === "USDM" || c.kind === "USDT").reduce((sum, c) => sum + (c.amountRaw ?? 0), 0);
+  const xp = collection.filter((c) => c.kind === "XP").reduce((sum, c) => sum + (c.amountRaw ?? 0), 0);
+  return {
+    username,
+    wallet,
+    xp,
+    packsShredded,
+    cards,
+    facts,
+    rewards,
+    collection,
+  };
+}
+
+function loadStoredProfileSummary(wallet: string | null): ProfileSummary {
+  if (typeof window === "undefined") return createEmptyProfileSummary(null, wallet);
+  const key = wallet ? `${PROFILE_STORAGE_PREFIX}:${walletToProfileId(wallet)}` : PROFILE_STORAGE_PREFIX;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return createEmptyProfileSummary(null, wallet);
+    const parsed = JSON.parse(raw) as Partial<ProfileSummary> & { collection?: unknown };
+    return {
+      ...createEmptyProfileSummary(parsed.username ?? null, wallet ?? parsed.wallet ?? null),
+      ...parsed,
+      collection: Array.isArray(parsed.collection) ? parsed.collection as Discovery[] : [],
+      wallet: wallet ?? parsed.wallet ?? null,
+    };
+  } catch {
+    return createEmptyProfileSummary(null, wallet);
+  }
+}
+
+function persistProfileSummary(summary: ProfileSummary, wallet: string | null) {
+  if (typeof window === "undefined") return;
+  const key = wallet ? `${PROFILE_STORAGE_PREFIX}:${walletToProfileId(wallet)}` : PROFILE_STORAGE_PREFIX;
+  try { window.localStorage.setItem(key, JSON.stringify(summary)); } catch { /* noop */ }
+}
+
+function buildLeaderboardEntries(events: LiveEvent[], profile: ProfileSummary): LeaderboardEntry[] {
+  const map = new Map<string, LeaderboardEntry>();
+  const addEntry = (user: string, wallet: string | null, xp: number, packsShredded: number, shreds: number) => {
+    const key = (wallet ?? user).toLowerCase();
+    const existing = map.get(key);
+    if (existing) {
+      existing.xp += xp;
+      existing.packsShredded += packsShredded;
+      existing.shreds += shreds;
+      return;
+    }
+    map.set(key, { user, wallet, xp, packsShredded, shreds, rank: 0 });
+  };
+
+  events.forEach((event) => {
+    const baseXp = typeof event.amount === "number" ? event.amount : (event.kind === "XP" ? 50 : 0);
+    const xpGain = event.kind === "XP" ? Math.max(0, Number(event.amount ?? 50)) : baseXp;
+    addEntry(event.user, event.wallet ?? null, xpGain, 1, 1);
+  });
+
+  if (profile.wallet || profile.username) {
+    addEntry(profile.username ?? (profile.wallet ? shortAddr(profile.wallet) : "You"), profile.wallet, profile.xp, profile.packsShredded, profile.packsShredded);
+  }
+
+  return Array.from(map.values())
+    .sort((a, b) => b.xp - a.xp || b.packsShredded - a.packsShredded || b.shreds - a.shreds)
+    .slice(0, 10)
+    .map((entry, index) => ({ ...entry, rank: index + 1 }));
+}
+
+function formatCooldownLabel(msLeft: number): string {
+  const hours = Math.floor(msLeft / (1000 * 60 * 60));
+  const minutes = Math.floor((msLeft % (1000 * 60 * 60)) / (1000 * 60));
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${Math.max(1, minutes)}m`;
 }
 
 const AVATAR_GRADIENTS = [
@@ -337,8 +428,11 @@ function HomeScreen() {
   const [username, setUsername] = useState<string | null>(null);
   const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>(LIVE_EVENTS_SEED);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [packStats, setPackStats] = useState<Record<string, { owners: number; shreds: number; drops: number }>>({});
   const [globalStats, setGlobalStats] = useState<{ shredders: number; packs_shredded: number; discoveries: number; rewards_usdm: number }>({ shredders: 0, packs_shredded: 0, discoveries: 0, rewards_usdm: 0 });
+  const [profileSummary, setProfileSummary] = useState<ProfileSummary>(() => createEmptyProfileSummary(null, null));
+  const [starterCooldownUntil, setStarterCooldownUntil] = useState<number | null>(null);
   const wallet = useWallet();
   const callAnnounce = useServerFn(announceShred);
   const callDistribute = useServerFn(distributeReward);
@@ -348,6 +442,10 @@ function HomeScreen() {
     if (!localStorage.getItem("shreds_onboarded")) setShowOnboarding(true);
     const u = localStorage.getItem("shreds_username");
     if (u) setUsername(u);
+    const storedProfile = loadStoredProfileSummary(wallet.address ?? null);
+    setProfileSummary(storedProfile);
+    const cooldown = Number(localStorage.getItem(STARTER_COOLDOWN_KEY));
+    if (cooldown && cooldown > Date.now()) setStarterCooldownUntil(cooldown);
     // Signal Farcaster hosts that the mini app is ready — hides the splash screen.
     (async () => {
       if (typeof window === "undefined") return;
@@ -378,26 +476,30 @@ function HomeScreen() {
     return () => { cancelled = true; };
   }, [wallet.address]);
 
-  // Load stats + live feed and subscribe to realtime.
+  const refreshStats = useCallback(async () => {
+    const [{ data: ps }, { data: gs }, { data: lf }] = await Promise.all([
+      supabase.from("pack_stats").select("pack_id,owners,shreds,drops"),
+      supabase.from("global_stats").select("shredders,packs_shredded,discoveries,rewards_usdm").eq("id", 1).maybeSingle(),
+      supabase.from("live_feed").select("username,wallet,pack_id,kind,text,amount").order("created_at", { ascending: false }).limit(30),
+    ]);
+    if (ps) {
+      const map: Record<string, { owners: number; shreds: number; drops: number }> = {};
+      ps.forEach((r) => { map[r.pack_id] = { owners: r.owners, shreds: r.shreds, drops: r.drops }; });
+      setPackStats(map);
+    }
+    if (gs) setGlobalStats({ shredders: gs.shredders, packs_shredded: gs.packs_shredded, discoveries: gs.discoveries, rewards_usdm: Number(gs.rewards_usdm) });
+    if (lf) {
+      const mapped = lf.map((r) => feedRowToEvent(r)).reverse().reverse();
+      setLiveEvents(mapped);
+      setLeaderboard(buildLeaderboardEntries(mapped, profileSummary));
+    }
+  }, [profileSummary]);
+
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      const [{ data: ps }, { data: gs }, { data: lf }] = await Promise.all([
-        supabase.from("pack_stats").select("pack_id,owners,shreds,drops"),
-        supabase.from("global_stats").select("shredders,packs_shredded,discoveries,rewards_usdm").eq("id", 1).maybeSingle(),
-        supabase.from("live_feed").select("username,wallet,pack_id,kind,text,amount").order("created_at", { ascending: false }).limit(30),
-      ]);
+    void refreshStats().then(() => {
       if (cancelled) return;
-      if (ps) {
-        const map: Record<string, { owners: number; shreds: number; drops: number }> = {};
-        ps.forEach((r) => { map[r.pack_id] = { owners: r.owners, shreds: r.shreds, drops: r.drops }; });
-        setPackStats(map);
-      }
-      if (gs) setGlobalStats({ shredders: gs.shredders, packs_shredded: gs.packs_shredded, discoveries: gs.discoveries, rewards_usdm: Number(gs.rewards_usdm) });
-      if (lf) {
-        setLiveEvents(lf.map((r) => feedRowToEvent(r)).reverse().reverse()); // newest first
-      }
-    })();
+    });
 
     const ch = supabase
       .channel("shreds-live")
@@ -411,13 +513,29 @@ function HomeScreen() {
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_feed" }, (payload) => {
         const r = payload.new as FeedRow;
-        setLiveEvents((prev) => [feedRowToEvent(r), ...prev].slice(0, 30));
+        const mapped = feedRowToEvent(r);
+        setLiveEvents((prev) => [mapped, ...prev].slice(0, 30));
+        setLeaderboard((prev) => buildLeaderboardEntries([mapped, ...prev.map((entry) => ({ user: entry.user, text: "", accent: "", from: "", wallet: entry.wallet, kind: "XP", amount: entry.xp }))], profileSummary));
         setTickerIdx(0);
       })
       .subscribe();
 
-    return () => { cancelled = true; void supabase.removeChannel(ch); };
-  }, []);
+    const poll = window.setInterval(() => { void refreshStats(); }, 7000);
+    return () => { cancelled = true; window.clearInterval(poll); void supabase.removeChannel(ch); };
+  }, [refreshStats]);
+
+  useEffect(() => {
+    setProfileSummary((prev) => {
+      const merged = { ...prev, username: username ?? prev.username, wallet: wallet.address ?? prev.wallet ?? null };
+      persistProfileSummary(merged, wallet.address ?? null);
+      return merged;
+    });
+  }, [username, wallet.address]);
+
+  useEffect(() => {
+    const summary = { ...profileSummary, username: username ?? profileSummary.username, wallet: wallet.address ?? profileSummary.wallet ?? null };
+    persistProfileSummary(summary, wallet.address ?? null);
+  }, [profileSummary, username, wallet.address]);
 
   const finishOnboarding = () => {
     try { localStorage.setItem("shreds_onboarded", "1"); } catch { /* noop */ }
@@ -447,6 +565,10 @@ function HomeScreen() {
 
   const executeShred = useCallback(() => {
     if (phase !== "idle") return;
+    if (pack.id === "starter" && starterCooldownUntil && starterCooldownUntil > Date.now()) {
+      setBuyError(`Starter Pack is ready again in ${formatCooldownLabel(starterCooldownUntil - Date.now())}.`);
+      return;
+    }
     const items = buildDiscoveries(pack.id);
     setReveals(items);
     audio.duckTheme();
@@ -455,7 +577,15 @@ function HomeScreen() {
     setTimeout(() => setPhase("shredded"), 700);
     setTimeout(() => {
       setPhase("revealing");
-      setCollection((c) => [...items, ...c].slice(0, 60));
+      setCollection((currentCollection) => {
+        const merged = [...items, ...currentCollection].slice(0, 60);
+        setProfileSummary((prev) => {
+          const nextSummary = deriveProfileSummary(merged, username ?? prev.username, wallet.address ?? prev.wallet ?? null, prev.packsShredded + 1);
+          persistProfileSummary(nextSummary, wallet.address ?? null);
+          return nextSummary;
+        });
+        return merged;
+      });
 
       // Announce to backend (updates stats + inserts live feed rows).
       const feedItems = items.map((i) => ({
@@ -469,7 +599,17 @@ function HomeScreen() {
         wallet: wallet.address ?? null,
         username: label,
         items: feedItems,
-      } }).catch(() => { /* non-fatal */ });
+      } }).then((result) => {
+        if (result?.ok === true) {
+          if (pack.id === "starter") {
+            const until = Date.now() + STARTER_COOLDOWN_MS;
+            setStarterCooldownUntil(until);
+            try { localStorage.setItem(STARTER_COOLDOWN_KEY, String(until)); } catch { /* noop */ }
+          }
+        } else if (result?.reason === "cooldown") {
+          setBuyError("Starter Pack can only be shredded once every 12 hours.");
+        }
+      }).catch(() => { /* non-fatal */ });
 
       // Automatically transfer USDM reward from the rewarder wallet.
       const usdmItem = items.find((i) => i.kind === "USDM");
@@ -482,7 +622,7 @@ function HomeScreen() {
         } }).catch(() => { /* non-fatal — user still keeps stats */ });
       }
     }, 1700);
-  }, [phase, pack.id, pack.name, username, wallet.address, callAnnounce, callDistribute]);
+  }, [phase, pack.id, starterCooldownUntil, username, wallet.address, callAnnounce, callDistribute]);
 
   const startShredInner = useCallback(async () => {
     // If paid and not yet purchased, buy first
@@ -955,7 +1095,7 @@ function LiveTicker({ event, idx }: { event: LiveEvent; idx: number }) {
 
 /* -------------------- Leaderboard -------------------- */
 
-function LeaderboardSheet({ onClose }: { onClose: () => void }) {
+function LeaderboardSheet({ onClose, entries }: { onClose: () => void; entries: LeaderboardEntry[] }) {
   const tabs = ["Daily", "Weekly", "Monthly", "All Time"] as const;
   const [tab, setTab] = useState<typeof tabs[number]>("Weekly");
 
@@ -970,20 +1110,37 @@ function LeaderboardSheet({ onClose }: { onClose: () => void }) {
           >{t.toUpperCase()}</button>
         ))}
       </div>
-      <EmptyState text={`No ${tab.toLowerCase()} rankings yet. Be the first to shred and claim the top spot.`} />
+      {entries.length === 0 ? (
+        <EmptyState text={`No ${tab.toLowerCase()} rankings yet. Be the first to shred and claim the top spot.`} />
+      ) : (
+        <div className="space-y-2">
+          {entries.map((entry) => (
+            <div key={`${entry.user}-${entry.wallet ?? "anon"}`} className="stat-card rounded-2xl p-3 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm bg-shred/15 text-shred">#{entry.rank}</div>
+              <div className="min-w-0 flex-1">
+                <div className="font-bold text-sm truncate">{entry.user}</div>
+                <div className="text-[10px] text-muted-foreground">{entry.packsShredded} packs • {entry.shreds} shreds</div>
+              </div>
+              <div className="text-right">
+                <div className="font-bold text-shred">{fmtNum(entry.xp)} XP</div>
+                <div className="text-[10px] text-muted-foreground">{entry.wallet ? shortAddr(entry.wallet) : "Local"}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </Sheet>
   );
 }
 
 /* -------------------- Profile -------------------- */
 
-function ProfileSheet({ onClose, wallet, collection, username, onRegister }: {
-  onClose: () => void; wallet: string | null; collection: Discovery[];
-  username: string | null; onRegister: () => void;
+function ProfileSheet({ onClose, wallet, summary, onRegister }: {
+  onClose: () => void; wallet: string | null; summary: ProfileSummary; onRegister: () => void;
 }) {
-  const cards = collection.filter(c => c.kind === "CARD");
-  const facts = collection.filter(c => c.kind === "FACT");
-  const stables = collection.filter(c => c.kind === "USDM");
+  const cards = summary.collection.filter(c => c.kind === "CARD");
+  const facts = summary.collection.filter(c => c.kind === "FACT");
+  const stables = summary.collection.filter(c => c.kind === "USDM" || c.kind === "USDT");
   const [tab, setTab] = useState<"CARDS" | "FACTS" | "REWARDS">("CARDS");
 
   return (
@@ -991,10 +1148,10 @@ function ProfileSheet({ onClose, wallet, collection, username, onRegister }: {
       <div className="stat-card rounded-2xl p-4 flex items-center gap-3">
         <div className="w-14 h-14 rounded-2xl shrink-0" style={{ background: AVATAR_GRADIENTS[0] }} />
         <div className="flex-1 min-w-0">
-          <div className="font-display text-xl truncate">{username ? username.toUpperCase() : "UNCLAIMED"}</div>
+          <div className="font-display text-xl truncate">{summary.username ? summary.username.toUpperCase() : "UNCLAIMED"}</div>
           <div className="text-[11px] text-muted-foreground truncate">{wallet ? shortAddr(wallet) : "Wallet not connected"}</div>
           {(() => {
-            const xp = collection.filter(c => c.kind === "XP").reduce((s, c) => s + (c.amountRaw ?? 0), 0);
+            const xp = summary.xp;
             const level = Math.max(1, Math.floor(xp / 500) + 1);
             const into = xp % 500;
             return (
@@ -1012,7 +1169,7 @@ function ProfileSheet({ onClose, wallet, collection, username, onRegister }: {
         </div>
       </div>
 
-      {!username && (
+      {!summary.username && (
         <button
           onClick={onRegister}
           className="mt-3 w-full py-3 rounded-2xl bg-shred text-primary-foreground font-bold text-xs tracking-widest glow-shred active:scale-[0.98] flex items-center justify-center gap-2"
@@ -1022,9 +1179,9 @@ function ProfileSheet({ onClose, wallet, collection, username, onRegister }: {
       )}
 
       <div className="grid grid-cols-3 gap-2 mt-4">
-        <ProfileStat label="PACKS" value={String(collection.length ? Math.ceil(collection.length / 3) : 0)} />
-        <ProfileStat label="CARDS" value={String(cards.length)} />
-        <ProfileStat label="FACTS" value={String(facts.length)} />
+        <ProfileStat label="PACKS" value={String(summary.packsShredded)} />
+        <ProfileStat label="CARDS" value={String(summary.cards)} />
+        <ProfileStat label="FACTS" value={String(summary.facts)} />
       </div>
 
       <div className="flex gap-1.5 mt-5 mb-3">
