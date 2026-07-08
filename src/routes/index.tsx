@@ -675,6 +675,7 @@ function HomeScreen() {
         />
       )}
       {showOnboarding && <OnboardingOverlay onDone={finishOnboarding} />}
+      {showHelp && <HelpSheet onClose={() => setShowHelp(false)} onReplay={replayOnboarding} />}
       {showUsernameModal && (
         <UsernameModal
           walletAddress={wallet.address}
