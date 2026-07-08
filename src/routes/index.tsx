@@ -207,6 +207,12 @@ const CARDS: Discovery[] = [
 ];
 
 function pickRandom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+function fmtNum(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
+  if (Number.isInteger(n)) return n.toString();
+  return n < 1 ? n.toFixed(2) : n.toFixed(2);
+}
 
 function buildDiscoveries(packId: string): Discovery[] {
   const items: Discovery[] = [];
