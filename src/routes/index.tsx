@@ -492,8 +492,13 @@ function HomeScreen() {
         return;
       }
       if (wallet.chainId !== CELO_CHAIN_ID) {
-        setBuyError("Please switch to Celo network.");
-        return;
+        setBuyError("Switching to Celo network…");
+        const acct = await wallet.connect();
+        if (!acct || wallet.chainId !== CELO_CHAIN_ID) {
+          setBuyError("Please switch your wallet to the Celo network to continue.");
+          return;
+        }
+        setBuyError(null);
       }
       setBuying(true); setBuyError(null);
       try {
