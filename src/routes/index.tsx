@@ -1321,3 +1321,73 @@ function UsernameModal({
   );
 }
 
+/* -------------------- Help & FAQ Sheet -------------------- */
+
+const FAQ_ITEMS: { q: string; a: string }[] = [
+  { q: "What is Shreds?", a: "Shreds is a mini app on Celo where you shred digital packs to discover USDM rewards, rare collection cards, XP and facts about MiniPay & Celo." },
+  { q: "How do I shred a pack?", a: "Pick a pack, then swipe diagonally across it. Paid packs charge USDM through your wallet first, then reveal your discoveries." },
+  { q: "How do rewards work?", a: "Every shred rolls a USDM reward from a weighted table sized to the pack tier. Rewards are sent from the Shreds rewarder wallet to your wallet automatically after the reveal." },
+  { q: "Why do I need a username?", a: "Usernames are registered on-chain so your discoveries and leaderboard rank stay yours across sessions and devices." },
+  { q: "How often can I open the free Starter Pack?", a: "The Starter Pack is free to shred and available any time to help you learn how discoveries work." },
+  { q: "Which wallets are supported?", a: "MiniPay, Farcaster's built-in wallet, and any Celo-compatible browser wallet (e.g. MetaMask on Celo)." },
+  { q: "Are rewards sent automatically?", a: "Yes. As soon as a shred generates a USDM discovery, the rewarder sends the amount to your wallet — you never have to claim manually." },
+];
+
+const SOCIAL_LINKS = [
+  { label: "Official X", href: "https://x.com/shreds_x" },
+  { label: "Telegram Channel", href: "https://t.me/shredsofficial" },
+  { label: "Telegram Community", href: "https://t.me/+E2XQlL0xko82ZjZk" },
+  { label: "Email Support", href: "mailto:shreds@signalify.xyz" },
+];
+
+function HelpSheet({ onClose, onReplay }: { onClose: () => void; onReplay: () => void }) {
+  const [open, setOpen] = useState<number | null>(0);
+  return (
+    <Sheet title="Help & FAQ" onClose={onClose} Icon={HelpCircle}>
+      <button
+        onClick={onReplay}
+        className="w-full py-3 rounded-2xl bg-shred text-primary-foreground font-bold text-xs tracking-widest glow-shred active:scale-[0.98] flex items-center justify-center gap-2 mb-4"
+      >
+        <ArrowRight className="w-4 h-4" /> REPLAY TUTORIAL
+      </button>
+
+      <div className="space-y-1.5 mb-5">
+        {FAQ_ITEMS.map((it, i) => (
+          <div key={i} className="stat-card rounded-xl overflow-hidden">
+            <button
+              onClick={() => setOpen(open === i ? null : i)}
+              className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left"
+            >
+              <span className="font-bold text-xs">{it.q}</span>
+              <span className="text-shred text-lg leading-none shrink-0">{open === i ? "−" : "+"}</span>
+            </button>
+            {open === i && (
+              <div className="px-3 pb-3 text-[11px] leading-relaxed text-muted-foreground">{it.a}</div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="text-[10px] font-bold tracking-[0.2em] text-muted-foreground mb-2">CONNECT WITH US</div>
+      <div className="grid grid-cols-2 gap-2">
+        {SOCIAL_LINKS.map((s) => (
+          <a
+            key={s.href}
+            href={s.href}
+            target="_blank"
+            rel="noreferrer"
+            className="stat-card rounded-xl px-3 py-2.5 flex items-center gap-2 active:scale-[0.98] transition"
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-shred shrink-0" />
+            <span className="text-[11px] font-bold truncate">{s.label}</span>
+          </a>
+        ))}
+      </div>
+      <div className="mt-4 text-center text-[10px] text-muted-foreground">
+        Built on Celo · Powered by MiniPay & Farcaster
+      </div>
+    </Sheet>
+  );
+}
+
+
