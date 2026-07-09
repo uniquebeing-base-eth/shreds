@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
   Trophy, User, Users, Package, Gem, Wallet, Flame, Gift, Star,
   Lightbulb, X, ChevronLeft, ChevronRight, Award, Zap,
@@ -258,6 +258,34 @@ function writeStoredPackStats(stats: Record<string, { owners: number; shreds: nu
   writeLocalJson("shreds_local_pack_stats", stats);
 }
 
+type StoredDiscovery = Omit<Discovery, "Icon">;
+
+function readStoredCollection(): StoredDiscovery[] {
+  return readLocalJson<StoredDiscovery[]>("shreds_local_collection", []);
+}
+
+function writeStoredCollection(collection: StoredDiscovery[]) {
+  writeLocalJson("shreds_local_collection", collection);
+}
+
+function hydrateDiscovery(item: StoredDiscovery): Discovery {
+  const iconMap: Record<Discovery["kind"], React.ComponentType<{ className?: string }>> = {
+    USDM: Wallet,
+    XP: Star,
+    CARD: Award,
+    FACT: Lightbulb,
+  };
+  return {
+    ...item,
+    Icon: iconMap[item.kind],
+  };
+}
+
+function dehydrateDiscovery(item: Discovery): StoredDiscovery {
+  const { Icon, ...rest } = item;
+  return rest;
+}
+
 function readStoredGlobalStats() {
   return readLocalJson<{ shredders: number; packs_shredded: number; discoveries: number; rewards_usdm: number }>("shreds_local_global_stats", { shredders: 0, packs_shredded: 0, discoveries: 0, rewards_usdm: 0 });
 }
@@ -472,7 +500,14 @@ function HomeScreen() {
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<"idle" | "slashing" | "shredded" | "revealing">("idle");
   const [reveals, setReveals] = useState<Discovery[]>([]);
-  const [collection, setCollection] = useState<Discovery[]>([]);
+  const [collection, setCollection] = useState<Discovery[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      return readStoredCollection().map(hydrateDiscovery);
+    } catch {
+      return [];
+    }
+  });
   const [tickerIdx, setTickerIdx] = useState(0);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -483,6 +518,7 @@ function HomeScreen() {
   const [profileSummary, setProfileSummary] = useState<ProfileSummary | null>(null);
   const [leaderboardRange, setLeaderboardRange] = useState<"daily" | "weekly" | "monthly" | "all">("weekly");
   const [starterCooldown, setStarterCooldown] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const [starterCooldownUntil, setStarterCooldownUntil] = useState<number | null>(null);
   const [buying, setBuying] = useState(false);
   const [buyError, setBuyError] = useState<string | null>(null);
@@ -553,6 +589,7 @@ function HomeScreen() {
     }
     const storedPackStats = readStoredPackStats();
     const storedGlobalStats = readStoredGlobalStats();
+    const storedCollection = readStoredCollection();
     if (Object.keys(storedPackStats).length > 0) setPackStats(storedPackStats);
     if (
       storedGlobalStats.packs_shredded > 0 ||
@@ -562,6 +599,10 @@ function HomeScreen() {
     ) {
       setGlobalStats(storedGlobalStats);
     }
+    if (storedCollection.length > 0) {
+      setCollection(storedCollection.map(hydrateDiscovery));
+    }
+    setHydrated(true);
     const until = Number(localStorage.getItem(getStarterCooldownKey(wallet.address)) || "0");
     const active = !!until && until > Date.now();
     setStarterCooldown(active);
@@ -652,12 +693,19 @@ function HomeScreen() {
   }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     writeStoredPackStats(packStats);
-  }, [packStats]);
+  }, [packStats, hydrated]);
 
   useEffect(() => {
+    if (!hydrated) return;
     writeStoredGlobalStats(globalStats);
-  }, [globalStats]);
+  }, [globalStats, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    writeStoredCollection(collection.map(dehydrateDiscovery));
+  }, [collection, hydrated]);
 
   useEffect(() => {
     if (!wallet.address || !profileSummary) return;
