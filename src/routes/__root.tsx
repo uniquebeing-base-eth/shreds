@@ -164,19 +164,21 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   useEffect(() => {
-    const initialize = async () => {
-      await initializeFarcasterMiniApp();
+    const initialize = () => {
+      window.requestAnimationFrame(() => {
+        void initializeFarcasterMiniApp();
+      });
     };
 
     if (typeof window === "undefined") return undefined;
 
     if (document.readyState === "complete") {
-      void initialize();
+      initialize();
       return undefined;
     }
 
     const onLoad = () => {
-      void initialize();
+      initialize();
       window.removeEventListener("load", onLoad);
     };
 
