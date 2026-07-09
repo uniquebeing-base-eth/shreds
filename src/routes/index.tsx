@@ -653,13 +653,32 @@ function HomeScreen() {
       if (Array.isArray(ps) && ps.length > 0) {
         const map: Record<string, { owners: number; shreds: number; drops: number }> = {};
         ps.forEach((r) => { map[r.pack_id] = { owners: r.owners, shreds: r.shreds, drops: r.drops }; });
-        setPackStats(map);
-        writeStoredPackStats(map);
+        setPackStats((prev) => {
+          const next = Object.keys(map).length > 0 ? map : prev;
+          if (Object.keys(next).length > 0) {
+            writeStoredPackStats(next);
+          }
+          return next;
+        });
       }
       if (gs) {
         const nextGlobalStats = { shredders: gs.shredders, packs_shredded: gs.packs_shredded, discoveries: gs.discoveries, rewards_usdm: Number(gs.rewards_usdm) };
-        setGlobalStats(nextGlobalStats);
-        writeStoredGlobalStats(nextGlobalStats);
+        setGlobalStats((prev) => {
+          const next = nextGlobalStats;
+          if (
+            next.packs_shredded > 0 ||
+            next.shredders > 0 ||
+            next.discoveries > 0 ||
+            next.rewards_usdm > 0 ||
+            prev.packs_shredded > 0 ||
+            prev.shredders > 0 ||
+            prev.discoveries > 0 ||
+            prev.rewards_usdm > 0
+          ) {
+            writeStoredGlobalStats(next);
+          }
+          return next;
+        });
       }
       if (lf) {
         setLiveEvents(lf.map((r) => feedRowToEvent(r)).reverse().reverse()); // newest first
@@ -694,12 +713,21 @@ function HomeScreen() {
 
   useEffect(() => {
     if (!hydrated) return;
-    writeStoredPackStats(packStats);
+    if (Object.keys(packStats).length > 0) {
+      writeStoredPackStats(packStats);
+    }
   }, [packStats, hydrated]);
 
   useEffect(() => {
     if (!hydrated) return;
-    writeStoredGlobalStats(globalStats);
+    if (
+      globalStats.packs_shredded > 0 ||
+      globalStats.shredders > 0 ||
+      globalStats.discoveries > 0 ||
+      globalStats.rewards_usdm > 0
+    ) {
+      writeStoredGlobalStats(globalStats);
+    }
   }, [globalStats, hydrated]);
 
   useEffect(() => {
