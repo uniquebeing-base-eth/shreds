@@ -629,11 +629,17 @@ function HomeScreen() {
       .channel("shreds-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "pack_stats" }, (payload) => {
         const r = payload.new as { pack_id: string; owners: number; shreds: number; drops: number };
-        setPackStats((prev) => ({ ...prev, [r.pack_id]: { owners: r.owners, shreds: r.shreds, drops: r.drops } }));
+        setPackStats((prev) => {
+          const next = { ...prev, [r.pack_id]: { owners: r.owners, shreds: r.shreds, drops: r.drops } };
+          writeStoredPackStats(next);
+          return next;
+        });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "global_stats" }, (payload) => {
         const r = payload.new as { shredders: number; packs_shredded: number; discoveries: number; rewards_usdm: number | string };
-        setGlobalStats({ shredders: r.shredders, packs_shredded: r.packs_shredded, discoveries: r.discoveries, rewards_usdm: Number(r.rewards_usdm) });
+        const next = { shredders: r.shredders, packs_shredded: r.packs_shredded, discoveries: r.discoveries, rewards_usdm: Number(r.rewards_usdm) };
+        setGlobalStats(next);
+        writeStoredGlobalStats(next);
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_feed" }, (payload) => {
         const r = payload.new as FeedRow;
@@ -646,20 +652,11 @@ function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    if (Object.keys(packStats).length > 0) {
-      writeStoredPackStats(packStats);
-    }
+    writeStoredPackStats(packStats);
   }, [packStats]);
 
   useEffect(() => {
-    if (
-      globalStats.packs_shredded > 0 ||
-      globalStats.shredders > 0 ||
-      globalStats.discoveries > 0 ||
-      globalStats.rewards_usdm > 0
-    ) {
-      writeStoredGlobalStats(globalStats);
-    }
+    writeStoredGlobalStats(globalStats);
   }, [globalStats]);
 
   useEffect(() => {
