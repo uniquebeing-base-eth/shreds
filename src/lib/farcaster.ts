@@ -5,13 +5,7 @@ export async function initializeFarcasterMiniApp(): Promise<boolean> {
   if (farcasterReadyPromise) return farcasterReadyPromise;
 
   farcasterReadyPromise = (async () => {
-    const looksLikeMiniApp = Boolean(
-      window.ReactNativeWebView || window.parent !== window,
-    );
-
-    if (!looksLikeMiniApp) return false;
-
-    for (let attempt = 0; attempt < 5; attempt += 1) {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
       try {
         const mod = await import(/* @vite-ignore */ "@farcaster/miniapp-sdk");
         const sdk = (mod as { sdk?: unknown; default?: unknown }).sdk ??
@@ -30,11 +24,11 @@ export async function initializeFarcasterMiniApp(): Promise<boolean> {
           throw new Error("ready-unavailable");
         }
 
-        await ready({});
+        await ready();
         return true;
       } catch {
-        if (attempt === 4) break;
-        await new Promise((resolve) => window.setTimeout(resolve, 250 + attempt * 250));
+        if (attempt === 7) break;
+        await new Promise((resolve) => window.setTimeout(resolve, 200 + attempt * 200));
       }
     }
 

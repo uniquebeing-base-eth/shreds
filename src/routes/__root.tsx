@@ -165,26 +165,30 @@ function RootComponent() {
 
   useEffect(() => {
     const initialize = () => {
-      window.requestAnimationFrame(() => {
+      const run = () => {
         void initializeFarcasterMiniApp();
-      });
+      };
+
+      if (document.readyState === "complete") {
+        window.requestAnimationFrame(run);
+        window.setTimeout(run, 250);
+        return;
+      }
+
+      const onLoad = () => {
+        window.requestAnimationFrame(run);
+        window.setTimeout(run, 250);
+        window.removeEventListener("load", onLoad);
+      };
+
+      window.addEventListener("load", onLoad);
     };
 
     if (typeof window === "undefined") return undefined;
 
-    if (document.readyState === "complete") {
-      initialize();
-      return undefined;
-    }
-
-    const onLoad = () => {
-      initialize();
-      window.removeEventListener("load", onLoad);
-    };
-
-    window.addEventListener("load", onLoad);
+    initialize();
     return () => {
-      window.removeEventListener("load", onLoad);
+      window.removeEventListener("load", () => undefined);
     };
   }, []);
 
