@@ -993,12 +993,33 @@ function HomeScreen() {
       // Automatically transfer USDM reward from the rewarder wallet.
       const usdmItem = items.find((i) => i.kind === "USDM");
       if (usdmItem && wallet.address && (usdmItem.amountRaw ?? 0) > 0) {
+        const nonce = `${wallet.address.toLowerCase()}-${Date.now()}`;
+        console.info("[reward] distributeReward request", {
+          wallet: wallet.address,
+          packId: pack.id,
+          amountUsdm: usdmItem.amountRaw,
+          nonce,
+        });
         void callDistribute({ data: {
           wallet: wallet.address,
           packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer",
           amountUsdm: usdmItem.amountRaw,
-          nonce: `${wallet.address.toLowerCase()}-${Date.now()}`,
-        } }).catch(() => { /* non-fatal — user still keeps stats */ });
+          nonce,
+        } }).then((result) => {
+          if (!result.ok) {
+            console.error("[reward] distributeReward failed", result);
+          } else {
+            console.info("[reward] distributeReward succeeded", result);
+          }
+        }).catch((error) => {
+          console.error("[reward] distributeReward request error", error);
+        });
+      } else {
+        console.info("[reward] distributeReward skipped", {
+          wallet: wallet.address,
+          packId: pack.id,
+          usdmAmount: usdmItem?.amountRaw,
+        });
       }
     }, 1700);
   }, [phase, pack.id, pack.name, username, wallet.address, callAnnounce, callDistribute, callUpsertProfile, recordShred, refreshProfileAndLeaderboard]);

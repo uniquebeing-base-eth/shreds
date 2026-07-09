@@ -24,13 +24,19 @@ export const distributeReward = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => Input.parse(raw))
   .handler(async ({ data }) => {
     const pk = process.env.BACKEND_SIGNER_KEY;
-    if (!pk) throw new Error("Reward signer not configured");
+    if (!pk) {
+      console.error("[reward] distributeReward missing BACKEND_SIGNER_KEY");
+      return { ok: false, error: "Reward signer not configured" };
+    }
 
     // Server clamps amount to a safe ceiling for the pack tier
     const priceCap = Number(PACK_PRICE_USDM[data.packId] || 0) * 4 || 0.05;
     const requested = data.amountUsdm ?? rollUsdm(data.packId);
     const amount = Math.min(Math.max(requested, 0), priceCap);
-    if (amount <= 0) return { ok: true, skipped: true };
+    if (amount <= 0) {
+      console.info("[reward] distributeReward skipped zero reward", { wallet: data.wallet, packId: data.packId, requested, priceCap });
+      return { ok: true, skipped: true };
+    }
 
     const [{ createWalletClient, createPublicClient, http, parseUnits, encodeFunctionData }, { privateKeyToAccount }, { celo }] = await Promise.all([
       import("viem"),
@@ -60,6 +66,15 @@ export const distributeReward = createServerFn({ method: "POST" })
       args: [data.wallet as `0x${string}`, amountWei],
     });
 
+    console.info("[reward] distributeReward start", {
+      wallet: data.wallet,
+      packId: data.packId,
+      requested,
+      priceCap,
+      amount,
+      signer: account.address,
+    });
+
     try {
       // Check rewarder balance first — surface a clean message if empty.
       const bal = (await publicClient.readContract({
@@ -68,7 +83,17 @@ export const distributeReward = createServerFn({ method: "POST" })
         functionName: "balanceOf",
         args: [account.address],
       })) as bigint;
+      console.info("[reward] distributeReward balance", {
+        signer: account.address,
+        balance: bal.toString(),
+        amountWei: amountWei.toString(),
+      });
       if (bal < amountWei) {
+        console.error("[reward] distributeReward insufficient balance", {
+          signer: account.address,
+          balance: bal.toString(),
+          amountWei: amountWei.toString(),
+        });
         return { ok: false, error: "reward_pool_empty", signer: account.address };
       }
 
@@ -76,16 +101,31 @@ export const distributeReward = createServerFn({ method: "POST" })
         to: USDM_ADDRESS as `0x${string}`,
         data: transferData,
       });
+      console.info("[reward] distributeReward txSent", { txHash: hash, signer: account.address });
 
       // Fire-and-forget receipt wait — but await so we can report success/failure.
       const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 30_000 });
+      console.info("[reward] distributeReward receipt", { hash, status: receipt.status, blockNumber: receipt.blockNumber });
+      const ok = receipt.status === "success";
+      if (!ok) {
+        console.error("[reward] distributeReward transaction failed", { receipt });
+      }
       return {
-        ok: receipt.status === "success",
+        ok,
         txHash: hash,
         amount,
         signer: account.address,
+        receipt: ok ? undefined : receipt,
       };
     } catch (e) {
-      return { ok: false, error: (e as Error)?.message?.slice(0, 200) ?? "send_failed" };
+      const errorMessage = (e as Error)?.message ?? String(e);
+      console.error("[reward] distributeReward error", {
+        wallet: data.wallet,
+        packId: data.packId,
+        amount,
+        signer: account.address,
+        error: errorMessage,
+      });
+      return { ok: false, error: errorMessage.slice(0, 200) || "send_failed" };
     }
   });
