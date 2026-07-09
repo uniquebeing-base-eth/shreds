@@ -294,6 +294,16 @@ function fmtNum(n: number): string {
   return n < 1 ? n.toFixed(2) : n.toFixed(2);
 }
 
+function formatCooldown(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
 function buildDiscoveries(packId: string): Discovery[] {
   const items: Discovery[] = [];
   // USDM roll (weighted by pack tier)
@@ -416,6 +426,7 @@ function HomeScreen() {
   const [profileSummary, setProfileSummary] = useState<ProfileSummary | null>(null);
   const [leaderboardRange, setLeaderboardRange] = useState<"daily" | "weekly" | "monthly" | "all">("weekly");
   const [starterCooldown, setStarterCooldown] = useState(false);
+  const [starterCooldownUntil, setStarterCooldownUntil] = useState<number | null>(null);
   const [buying, setBuying] = useState(false);
   const [buyError, setBuyError] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
@@ -430,12 +441,40 @@ function HomeScreen() {
   const callGetMyProfile = useServerFn(getMyProfile);
   const callGetLeaderboard = useServerFn(getLeaderboard);
 
+  const refreshProfileAndLeaderboard = useCallback(async () => {
+    if (!wallet.address) return;
+    try {
+      const profile = await callGetMyProfile({ data: { wallet: wallet.address } });
+      const nextProfile = profile as { username?: string | null; wallet?: string | null; xp?: number | null; packs_shredded?: number | null } | null;
+      if (nextProfile?.username) {
+        setUsername(nextProfile.username);
+        try { localStorage.setItem("shreds_username", nextProfile.username); } catch { /* noop */ }
+      }
+      if (nextProfile) {
+        setProfileSummary({
+          username: nextProfile.username ?? null,
+          wallet: nextProfile.wallet ?? wallet.address,
+          xp: Number(nextProfile.xp ?? 0),
+          packs_shredded: Number(nextProfile.packs_shredded ?? 0),
+          level: Math.max(1, Math.floor(Number(nextProfile.xp ?? 0) / 500) + 1),
+        });
+      }
+      const rows = await callGetLeaderboard({ data: { range: leaderboardRange } });
+      setLeaderboard((rows as LeaderboardRow[] | undefined) ?? []);
+    } catch {
+      setLeaderboard([]);
+    }
+  }, [wallet.address, leaderboardRange, callGetMyProfile, callGetLeaderboard]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!localStorage.getItem("shreds_onboarded")) setShowOnboarding(true);
     const u = localStorage.getItem("shreds_username");
     if (u) setUsername(u);
-    setStarterCooldown(!canUseStarterPack(wallet.address));
+    const until = Number(localStorage.getItem(getStarterCooldownKey(wallet.address)) || "0");
+    const active = !!until && until > Date.now();
+    setStarterCooldown(active);
+    setStarterCooldownUntil(active ? until : null);
     void initializeFarcasterMiniApp();
     // Warm image cache so packs & discoveries render instantly on first shred.
     const warm = [
@@ -458,28 +497,15 @@ function HomeScreen() {
     if (wallet.address) {
       void callUpsertProfile({ data: { wallet: wallet.address } }).catch(() => { /* non-fatal */ });
     }
-    void callGetMyProfile({ data: { wallet: wallet.address } }).then((profile) => {
-      if (cancelled) return;
-      const nextProfile = profile as { username?: string | null; wallet?: string | null; xp?: number | null; packs_shredded?: number | null } | null;
-      if (nextProfile?.username) {
-        setUsername(nextProfile.username);
-        try { localStorage.setItem("shreds_username", nextProfile.username); } catch { /* noop */ }
-      }
-      if (nextProfile) {
-        setProfileSummary({
-          username: nextProfile.username ?? null,
-          wallet: nextProfile.wallet ?? wallet.address,
-          xp: Number(nextProfile.xp ?? 0),
-          packs_shredded: Number(nextProfile.packs_shredded ?? 0),
-          level: Math.max(1, Math.floor(Number(nextProfile.xp ?? 0) / 500) + 1),
-        });
-      }
-    }).catch(() => { /* non-fatal */ });
+    void refreshProfileAndLeaderboard();
     return () => { cancelled = true; };
-  }, [wallet.address, callGetMyProfile]);
+  }, [wallet.address, refreshProfileAndLeaderboard, callUpsertProfile]);
 
   useEffect(() => {
-    setStarterCooldown(!canUseStarterPack(wallet.address));
+    const until = Number(localStorage.getItem(getStarterCooldownKey(wallet.address)) || "0");
+    const active = !!until && until > Date.now();
+    setStarterCooldown(active);
+    setStarterCooldownUntil(active ? until : null);
   }, [wallet.address]);
 
   // Load stats + live feed and subscribe to realtime.
@@ -525,10 +551,23 @@ function HomeScreen() {
 
   useEffect(() => {
     if (!wallet.address) return;
-    void callGetLeaderboard({ data: { range: leaderboardRange } }).then((rows) => {
-      setLeaderboard((rows as LeaderboardRow[] | undefined) ?? []);
-    }).catch(() => { setLeaderboard([]); });
-  }, [leaderboardRange, wallet.address, callGetLeaderboard]);
+    void refreshProfileAndLeaderboard();
+  }, [leaderboardRange, wallet.address, refreshProfileAndLeaderboard]);
+
+  useEffect(() => {
+    if (!starterCooldownUntil) return;
+    const interval = window.setInterval(() => {
+      const remaining = starterCooldownUntil - Date.now();
+      if (remaining <= 0) {
+        setStarterCooldownUntil(null);
+        setStarterCooldown(false);
+        window.clearInterval(interval);
+        return;
+      }
+      setStarterCooldown(true);
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [starterCooldownUntil]);
 
   const finishOnboarding = () => {
     try { localStorage.setItem("shreds_onboarded", "1"); } catch { /* noop */ }
@@ -542,13 +581,16 @@ function HomeScreen() {
     setUsername(name);
     setShowUsernameModal(false);
     if (wallet.address) {
-      void callUpsertProfile({ data: { wallet: wallet.address, username: name } }).catch(() => { /* non-fatal */ });
+      void callUpsertProfile({ data: { wallet: wallet.address, username: name } }).then(() => {
+        void refreshProfileAndLeaderboard();
+      }).catch(() => { /* non-fatal */ });
     }
     // continue to shredding flow
     setTimeout(() => { void startShredInner(); }, 200);
   };
 
   const pack = PACKS[index];
+  const starterCooldownLabel = starterCooldownUntil ? `Next free shred in ${formatCooldown(Math.max(0, starterCooldownUntil - Date.now()))}` : null;
 
   useEffect(() => {
     if (liveEvents.length < 2) return;
@@ -577,7 +619,9 @@ function HomeScreen() {
 
       if (pack.id === "starter") {
         markStarterPackUsed(wallet.address);
-        setStarterCooldown(true);
+        const until = Date.now() + STARTER_PACK_COOLDOWN_MS;
+        setStarterCooldownUntil(until);
+        setStarterCooldown(false);
       }
 
       // Announce to backend (updates stats + inserts live feed rows).
@@ -592,7 +636,9 @@ function HomeScreen() {
         callAnnounce({ data: { packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer", wallet: wallet.address ?? null, username: label, items: feedItems } }),
         wallet.address ? recordShred({ data: { wallet: wallet.address, packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer", items: items.map((i) => ({ kind: i.kind, title: i.title, sub: i.sub, rarity: i.rarity, amount: i.amountRaw })) } }) : Promise.resolve({ ok: true }),
         wallet.address ? callUpsertProfile({ data: { wallet: wallet.address, username: label } }) : Promise.resolve({ ok: true }),
-      ]).catch(() => { /* non-fatal */ });
+      ]).then(() => {
+        void refreshProfileAndLeaderboard();
+      }).catch(() => { /* non-fatal */ });
 
       // Automatically transfer USDM reward from the rewarder wallet.
       const usdmItem = items.find((i) => i.kind === "USDM");
@@ -605,7 +651,7 @@ function HomeScreen() {
         } }).catch(() => { /* non-fatal — user still keeps stats */ });
       }
     }, 1700);
-  }, [phase, pack.id, pack.name, username, wallet.address, callAnnounce, callDistribute]);
+  }, [phase, pack.id, pack.name, username, wallet.address, callAnnounce, callDistribute, callUpsertProfile, recordShred, refreshProfileAndLeaderboard]);
 
   const startShredInner = useCallback(async () => {
     if (pack.id === "starter" && !canUseStarterPack(wallet.address)) {
@@ -771,6 +817,9 @@ function HomeScreen() {
         <div className="mt-2 text-center">
           <div className="font-display text-lg text-shred text-glow-shred leading-none">SLASH TO SHRED</div>
           <div className="text-[8px] tracking-[0.2em] font-semibold text-muted-foreground mt-0.5">REVEAL YOUR DISCOVERIES</div>
+          {starterCooldown && starterCooldownLabel && (
+            <div className="mt-1 text-[10px] font-semibold tracking-[0.16em] text-[color:var(--gold)]">{starterCooldownLabel.toUpperCase()}</div>
+          )}
         </div>
 
         {buyError && (
