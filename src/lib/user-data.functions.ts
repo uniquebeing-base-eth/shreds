@@ -1,20 +1,23 @@
 // Server fns backing profile, leaderboard, activity, and pack purchase records.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { walletToProfileId } from "@/lib/profile";
+import { normalizeWallet, walletToProfileId } from "@/lib/profile";
 
 /* -------------------- Profile / username -------------------- */
 
+const ProfileUpsertInput = z.object({
+  wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  username: z.string().min(1).max(32).optional(),
+  xp: z.number().int().nonnegative().optional(),
+  packs_shredded: z.number().int().nonnegative().optional(),
+  level: z.number().int().positive().optional(),
+});
+
 export const upsertProfile = createServerFn({ method: "POST" })
-  .inputValidator((raw: unknown) =>
-    z.object({
-      wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
-      username: z.string().min(1).max(32).optional(),
-    }).parse(raw),
-  )
+  .inputValidator((raw: unknown) => ProfileUpsertInput.parse(raw))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const normalizedWallet = data.wallet.toLowerCase();
+    const normalizedWallet = normalizeWallet(data.wallet) ?? data.wallet.toLowerCase();
     const profileId = walletToProfileId(normalizedWallet);
     const { data: existing, error: lookupError } = await supabaseAdmin
       .from("profiles")
@@ -23,13 +26,19 @@ export const upsertProfile = createServerFn({ method: "POST" })
       .maybeSingle();
     if (lookupError) throw new Error(lookupError.message);
 
+    const nextXp = typeof data.xp === "number" ? data.xp : Number(existing?.xp ?? 0);
+    const nextPacksShredded = typeof data.packs_shredded === "number" ? data.packs_shredded : Number(existing?.packs_shredded ?? 0);
+    const nextLevel = typeof data.level === "number"
+      ? data.level
+      : Math.max(1, Math.floor(nextXp / 500) + 1);
+
     const payload = {
       id: profileId,
       wallet: normalizedWallet,
       username: data.username ?? existing?.username ?? null,
-      xp: existing?.xp ?? 0,
-      packs_shredded: existing?.packs_shredded ?? 0,
-      level: existing?.level ?? 1,
+      xp: nextXp,
+      packs_shredded: nextPacksShredded,
+      level: nextLevel,
       updated_at: new Date().toISOString(),
     };
     const { error } = await supabaseAdmin.from("profiles").upsert(payload, { onConflict: "id" });

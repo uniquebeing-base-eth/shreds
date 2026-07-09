@@ -10,6 +10,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useWallet, shortAddr } from "@/lib/wallet";
 import { audio } from "@/lib/audio";
 import { rollUsdm, formatUsdm } from "@/lib/rewards";
+import { mergeStoredProfiles, toStoredProfile } from "@/lib/profile";
 import { announceShred } from "@/lib/announce-shred.functions";
 import { distributeReward } from "@/lib/distribute-reward.functions";
 import {
@@ -244,8 +245,12 @@ function writeStoredProfiles(profiles: Record<string, StoredProfile>) {
 function upsertStoredProfile(wallet: string | null | undefined, profile: StoredProfile) {
   if (!wallet) return;
   const key = wallet.toLowerCase();
-  const profiles = readStoredProfiles();
-  profiles[key] = profile;
+  const profiles = mergeStoredProfiles(readStoredProfiles(), [profile]);
+  profiles[key] = {
+    ...profiles[key],
+    ...profile,
+    wallet: profile.wallet ?? key,
+  };
   writeStoredProfiles(profiles);
 }
 
@@ -585,13 +590,9 @@ function HomeScreen() {
           try { localStorage.setItem("shreds_username", nextProfile.username); } catch { /* noop */ }
         }
         if (nextProfile) {
-          const normalizedProfile: StoredProfile = {
-            username: nextProfile.username ?? null,
-            wallet: nextProfile.wallet ?? wallet.address,
-            xp: Number(nextProfile.xp ?? 0),
-            packs_shredded: Number(nextProfile.packs_shredded ?? 0),
-            level: Math.max(1, Math.floor(Number(nextProfile.xp ?? 0) / 500) + 1),
-          };
+          const normalizedProfile = toStoredProfile(wallet.address, nextProfile);
+          const mergedProfiles = mergeStoredProfiles(storedProfiles, [normalizedProfile]);
+          writeStoredProfiles(mergedProfiles);
           setProfileSummary(normalizedProfile);
           upsertStoredProfile(wallet.address, normalizedProfile);
         }
@@ -599,6 +600,14 @@ function HomeScreen() {
       const rows = await callGetLeaderboard({ data: { range: leaderboardRange } });
       const nextRows = (rows as LeaderboardRow[] | undefined) ?? [];
       if (nextRows.length > 0) {
+        const mergedProfiles = mergeStoredProfiles(storedProfiles, nextRows.map((row) => ({
+          username: row.username,
+          wallet: row.wallet,
+          xp: row.xp,
+          packs_shredded: row.packs_shredded,
+          level: Math.max(1, Math.floor(row.xp / 500) + 1),
+        })));
+        writeStoredProfiles(mergedProfiles);
         setLeaderboard(nextRows);
       } else {
         const fallbackRows = buildLeaderboardFromProfiles(storedProfiles);
@@ -651,6 +660,44 @@ function HomeScreen() {
       console.error("[stats] failed to refresh shared stats", error);
     }
   }, [callGetStatsAndFeed]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onStorage = (event: StorageEvent) => {
+      if (!event.key) return;
+      if (event.key === "shreds_username") {
+        const value = event.newValue;
+        if (value) setUsername(value);
+        return;
+      }
+      if (event.key === "shreds_local_profiles") {
+        const profiles = readStoredProfiles();
+        if (wallet.address) {
+          const storedProfile = profiles[wallet.address.toLowerCase()];
+          if (storedProfile) {
+            setProfileSummary(storedProfile);
+          }
+        }
+        return;
+      }
+      if (event.key === "shreds_local_global_stats") {
+        const stats = readStoredGlobalStats();
+        setGlobalStats((prev) => ({ ...prev, ...stats }));
+        return;
+      }
+      if (event.key === "shreds_local_pack_stats") {
+        const stats = readStoredPackStats();
+        setPackStats(stats);
+        return;
+      }
+      if (event.key === "shreds_local_live_events") {
+        setLiveEvents(readStoredLiveEvents());
+      }
+    };
+
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [wallet.address]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -898,6 +945,7 @@ function HomeScreen() {
         writeStoredGlobalStats(next);
         return next;
       });
+      let optimisticProfile: StoredProfile | null = null;
       setProfileSummary((prev) => {
         const next = prev ? {
           ...prev,
@@ -911,6 +959,7 @@ function HomeScreen() {
           packs_shredded: 1,
           level: Math.max(1, Math.floor(xpGain / 500) + 1),
         };
+        optimisticProfile = next;
         if (wallet.address) {
           upsertStoredProfile(wallet.address, next);
         }
@@ -926,16 +975,16 @@ function HomeScreen() {
             packs_shredded: (prev.find((row) => row.wallet?.toLowerCase() === wallet.address.toLowerCase())?.packs_shredded ?? 0) + 1,
             level: Math.max(1, Math.floor(((prev.find((row) => row.wallet?.toLowerCase() === wallet.address.toLowerCase())?.xp ?? 0) + xpGain) / 500) + 1),
           };
-          profiles[wallet.address.toLowerCase()] = nextProfile;
-          writeStoredProfiles(profiles);
-          return buildLeaderboardFromProfiles(profiles);
+          const mergedProfiles = mergeStoredProfiles(profiles, [nextProfile]);
+          writeStoredProfiles(mergedProfiles);
+          return buildLeaderboardFromProfiles(mergedProfiles);
         }
         return prev;
       });
       void Promise.all([
         callAnnounce({ data: { packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer", wallet: wallet.address ?? null, username: label, items: feedItems } }),
         wallet.address ? recordShred({ data: { wallet: wallet.address, packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer", items: items.map((i) => ({ kind: i.kind, title: i.title, sub: i.sub, rarity: i.rarity, amount: i.amountRaw })) } }) : Promise.resolve({ ok: true }),
-        wallet.address ? callUpsertProfile({ data: { wallet: wallet.address, username: label } }) : Promise.resolve({ ok: true }),
+        wallet.address && optimisticProfile ? callUpsertProfile({ data: { wallet: wallet.address, username: label, xp: optimisticProfile.xp, packs_shredded: optimisticProfile.packs_shredded, level: optimisticProfile.level } }) : Promise.resolve({ ok: true }),
       ]).then(() => {
         void refreshProfileAndLeaderboard();
         void refreshStatsAndFeed();
