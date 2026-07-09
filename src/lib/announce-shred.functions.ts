@@ -46,14 +46,40 @@ export const announceShred = createServerFn({ method: "POST" })
       .filter((i) => i.kind === "USDM" || i.kind === "USDT")
       .reduce((s, i) => s + (i.amount ?? 0), 0);
 
-    // Update stats atomically
-    await supabaseAdmin.rpc("apply_shred", {
-      _pack_id: data.packId,
-      _drops: data.items.length,
-      _rewards_usdm: rewards,
-      _is_new_owner: isNewOwner,
-      _is_new_shredder: isNewShredder,
-    });
+    const { data: currentPackRow, error: packLookupError } = await supabaseAdmin
+      .from("pack_stats")
+      .select("pack_id, owners, shreds, drops")
+      .eq("pack_id", data.packId)
+      .maybeSingle();
+    if (packLookupError) throw new Error(packLookupError.message);
+
+    const nextPackStats = {
+      pack_id: data.packId,
+      owners: Number(currentPackRow?.owners ?? 0) + (isNewOwner ? 1 : 0),
+      shreds: Number(currentPackRow?.shreds ?? 0) + 1,
+      drops: Number(currentPackRow?.drops ?? 0) + Math.max(data.items.length, 0),
+      updated_at: new Date().toISOString(),
+    };
+    const { error: packStatsError } = await supabaseAdmin.from("pack_stats").upsert(nextPackStats, { onConflict: "pack_id" });
+    if (packStatsError) throw new Error(packStatsError.message);
+
+    const { data: currentGlobalRow, error: globalLookupError } = await supabaseAdmin
+      .from("global_stats")
+      .select("id, shredders, packs_shredded, discoveries, rewards_usdm")
+      .eq("id", 1)
+      .maybeSingle();
+    if (globalLookupError) throw new Error(globalLookupError.message);
+
+    const nextGlobalStats = {
+      id: 1,
+      shredders: Number(currentGlobalRow?.shredders ?? 0) + (isNewShredder ? 1 : 0),
+      packs_shredded: Number(currentGlobalRow?.packs_shredded ?? 0) + 1,
+      discoveries: Number(currentGlobalRow?.discoveries ?? 0) + Math.max(data.items.length, 0),
+      rewards_usdm: Number(currentGlobalRow?.rewards_usdm ?? 0) + Math.max(rewards, 0),
+      updated_at: new Date().toISOString(),
+    };
+    const { error: globalStatsError } = await supabaseAdmin.from("global_stats").upsert(nextGlobalStats, { onConflict: "id" });
+    if (globalStatsError) throw new Error(globalStatsError.message);
 
     // Insert one feed row per item (skip XP to keep feed tight)
     const feedRows = data.items

@@ -14,13 +14,25 @@ export const upsertProfile = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const profileId = walletToProfileId(data.wallet);
+    const normalizedWallet = data.wallet.toLowerCase();
+    const profileId = walletToProfileId(normalizedWallet);
+    const { data: existing, error: lookupError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, username, xp, packs_shredded, level")
+      .eq("id", profileId)
+      .maybeSingle();
+    if (lookupError) throw new Error(lookupError.message);
+
     const payload = {
       id: profileId,
-      wallet: data.wallet.toLowerCase(),
-      ...(data.username ? { username: data.username } : {}),
+      wallet: normalizedWallet,
+      username: data.username ?? existing?.username ?? null,
+      xp: existing?.xp ?? 0,
+      packs_shredded: existing?.packs_shredded ?? 0,
+      level: existing?.level ?? 1,
+      updated_at: new Date().toISOString(),
     };
-    const { error } = await supabaseAdmin.from("profiles").upsert(payload);
+    const { error } = await supabaseAdmin.from("profiles").upsert(payload, { onConflict: "id" });
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -54,16 +66,33 @@ export const recordShred = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => DiscoveryInput.parse(raw))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const profileId = walletToProfileId(data.wallet);
+    const normalizedWallet = data.wallet.toLowerCase();
+    const profileId = walletToProfileId(normalizedWallet);
     const xpGain = data.items
       .filter((i) => i.kind === "XP" && typeof i.amount === "number")
       .reduce((s, i) => s + (i.amount ?? 0), 0);
 
-    await supabaseAdmin.rpc("increment_shred_stats", {
-      _user: profileId,
-      _xp: xpGain,
-      _pack: data.packId,
-    });
+    const { data: existingProfile, error: profileLookupError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, username, xp, packs_shredded, level")
+      .eq("id", profileId)
+      .maybeSingle();
+    if (profileLookupError) throw new Error(profileLookupError.message);
+
+    const nextXp = Number(existingProfile?.xp ?? 0) + xpGain;
+    const nextPacksShredded = Number(existingProfile?.packs_shredded ?? 0) + 1;
+    const nextLevel = Math.max(1, Math.floor(nextXp / 500) + 1);
+
+    const { error: profileError } = await supabaseAdmin.from("profiles").upsert({
+      id: profileId,
+      wallet: normalizedWallet,
+      username: existingProfile?.username ?? null,
+      xp: nextXp,
+      packs_shredded: nextPacksShredded,
+      level: nextLevel,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "id" });
+    if (profileError) throw new Error(profileError.message);
 
     const rows = data.items.map((i) => ({
       user_id: profileId,

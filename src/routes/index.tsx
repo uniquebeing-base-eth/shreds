@@ -632,6 +632,29 @@ function HomeScreen() {
         amount: i.amountRaw,
       }));
       const label = username ?? (wallet.address ? shortAddr(wallet.address) : "Shredder");
+      const xpGain = items.reduce((sum, i) => sum + ((i.kind === "XP" && typeof i.amountRaw === "number") ? i.amountRaw : 0), 0);
+      const rewardsUsdm = items.reduce((sum, i) => sum + ((i.kind === "USDM" && typeof i.amountRaw === "number") ? i.amountRaw : 0), 0);
+      setPackStats((prev) => ({
+        ...prev,
+        [pack.id]: {
+          owners: (prev[pack.id]?.owners ?? 0) + 1,
+          shreds: (prev[pack.id]?.shreds ?? 0) + 1,
+          drops: (prev[pack.id]?.drops ?? 0) + items.length,
+        },
+      }));
+      setGlobalStats((prev) => ({
+        ...prev,
+        packs_shredded: prev.packs_shredded + 1,
+        discoveries: prev.discoveries + items.length,
+        rewards_usdm: prev.rewards_usdm + rewardsUsdm,
+        shredders: prev.shredders + (wallet.address ? 1 : 0),
+      }));
+      setProfileSummary((prev) => prev ? {
+        ...prev,
+        xp: prev.xp + xpGain,
+        packs_shredded: prev.packs_shredded + 1,
+        level: Math.max(1, Math.floor((prev.xp + xpGain) / 500) + 1),
+      } : null);
       void Promise.all([
         callAnnounce({ data: { packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer", wallet: wallet.address ?? null, username: label, items: feedItems } }),
         wallet.address ? recordShred({ data: { wallet: wallet.address, packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer", items: items.map((i) => ({ kind: i.kind, title: i.title, sub: i.sub, rarity: i.rarity, amount: i.amountRaw })) } }) : Promise.resolve({ ok: true }),
