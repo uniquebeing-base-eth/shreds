@@ -434,9 +434,25 @@ const LIVE_EVENTS_SEED: LiveEvent[] = [];
 
 type FeedRow = { username: string; wallet: string | null; pack_id: string | null; kind: string; text: string; amount: number | string | null };
 function feedRowToEvent(r: FeedRow): LiveEvent {
-  const [verb, ...rest] = r.text.split(" ");
+  const username = r.username ? (r.username.startsWith("@") ? r.username : `@${r.username}`) : "@Shredder";
+  // Normalize kind/amount/title into a friendly ticker message
+  if (r.kind === "USDM" || r.kind === "USDT") {
+    const amt = typeof r.amount === "number" ? Number(r.amount) : r.amount ?? "";
+    return { user: username, text: "just got", accent: `${amt} ${r.kind.toLowerCase()}`, from: r.pack_id ?? "Shreds" };
+  }
+  if (r.kind === "CARD") {
+    // text was set to something like 'collected <title>' in the inserter
+    const title = r.text?.replace(/^collected\s+/i, '') || r.kind;
+    return { user: username, text: "collected", accent: title, from: r.pack_id ?? "Shreds" };
+  }
+  if (r.kind === "FACT") {
+    const fact = r.text || "a fact";
+    return { user: username, text: "discovered", accent: fact, from: r.pack_id ?? "Shreds" };
+  }
+  // Fallback: use raw text split into verb + rest
+  const [verb, ...rest] = (r.text || "").split(" ");
   return {
-    user: r.username,
+    user: username,
     text: verb || "shredded",
     accent: rest.join(" ") || r.kind,
     from: r.pack_id ?? "Shreds",
@@ -943,7 +959,8 @@ function HomeScreen() {
       setBuying(true); setBuyError(null);
       try {
         await buyPackOnChain(pack.id, wallet.address, wallet.getEth);
-        setPurchased((s) => new Set([...s, pack.id]));
+        // Do not persist a "purchased" entry — paid packs are single-use.
+        // The user must pay for each shred; prevent permanent unlocking.
         setBuying(false);
         executeShred();
       } catch (e: unknown) {
