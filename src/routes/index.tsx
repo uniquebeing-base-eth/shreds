@@ -554,7 +554,12 @@ function HomeScreen() {
     const storedPackStats = readStoredPackStats();
     const storedGlobalStats = readStoredGlobalStats();
     if (Object.keys(storedPackStats).length > 0) setPackStats(storedPackStats);
-    if (storedGlobalStats.packs_shredded > 0 || storedGlobalStats.shredders > 0 || storedGlobalStats.discoveries > 0) {
+    if (
+      storedGlobalStats.packs_shredded > 0 ||
+      storedGlobalStats.shredders > 0 ||
+      storedGlobalStats.discoveries > 0 ||
+      storedGlobalStats.rewards_usdm > 0
+    ) {
       setGlobalStats(storedGlobalStats);
     }
     const until = Number(localStorage.getItem(getStarterCooldownKey(wallet.address)) || "0");
@@ -639,6 +644,28 @@ function HomeScreen() {
 
     return () => { cancelled = true; void supabase.removeChannel(ch); };
   }, []);
+
+  useEffect(() => {
+    if (Object.keys(packStats).length > 0) {
+      writeStoredPackStats(packStats);
+    }
+  }, [packStats]);
+
+  useEffect(() => {
+    if (
+      globalStats.packs_shredded > 0 ||
+      globalStats.shredders > 0 ||
+      globalStats.discoveries > 0 ||
+      globalStats.rewards_usdm > 0
+    ) {
+      writeStoredGlobalStats(globalStats);
+    }
+  }, [globalStats]);
+
+  useEffect(() => {
+    if (!wallet.address || !profileSummary) return;
+    upsertStoredProfile(wallet.address, profileSummary);
+  }, [wallet.address, profileSummary]);
 
   useEffect(() => {
     if (!wallet.address) return;
