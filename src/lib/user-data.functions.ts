@@ -1,41 +1,45 @@
 // Server fns backing profile, leaderboard, activity, and pack purchase records.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { walletToProfileId } from "@/lib/profile";
 
 /* -------------------- Profile / username -------------------- */
 
 export const upsertProfile = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) =>
     z.object({
       wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
       username: z.string().min(1).max(32).optional(),
     }).parse(raw),
   )
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const profileId = walletToProfileId(data.wallet);
     const payload = {
-      id: context.userId,
+      id: profileId,
       wallet: data.wallet.toLowerCase(),
       ...(data.username ? { username: data.username } : {}),
     };
-    const { error } = await context.supabase.from("profiles").upsert(payload);
+    const { error } = await supabaseAdmin.from("profiles").upsert(payload);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
 
 export const getMyProfile = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
-      .from("profiles").select("*").eq("id", context.userId).maybeSingle();
+  .inputValidator((raw: unknown) => z.object({ wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/) }).parse(raw ?? {}))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const profileId = walletToProfileId(data.wallet);
+    const { data: row, error } = await supabaseAdmin
+      .from("profiles").select("*").eq("id", profileId).maybeSingle();
     if (error) throw new Error(error.message);
-    return data;
+    return row;
   });
 
 /* -------------------- Discoveries / activity -------------------- */
 
 const DiscoveryInput = z.object({
+  wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
   packId: z.enum(["starter", "mystery", "alpha", "legendary", "explorer"]),
   items: z.array(z.object({
     kind: z.enum(["USDM", "USDT", "XP", "CARD", "FACT"]),
@@ -47,23 +51,22 @@ const DiscoveryInput = z.object({
 });
 
 export const recordShred = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => DiscoveryInput.parse(raw))
-  .handler(async ({ data, context }) => {
-    const supabase = context.supabase;
-    // Add XP for each item that has an amount + kind == XP; increment shred counter.
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const profileId = walletToProfileId(data.wallet);
     const xpGain = data.items
       .filter((i) => i.kind === "XP" && typeof i.amount === "number")
       .reduce((s, i) => s + (i.amount ?? 0), 0);
 
-    await supabase.rpc("increment_shred_stats", {
-      _user: context.userId,
+    await supabaseAdmin.rpc("increment_shred_stats", {
+      _user: profileId,
       _xp: xpGain,
       _pack: data.packId,
     });
 
     const rows = data.items.map((i) => ({
-      user_id: context.userId,
+      user_id: profileId,
       pack_id: data.packId,
       kind: i.kind,
       title: i.title,
@@ -71,22 +74,24 @@ export const recordShred = createServerFn({ method: "POST" })
       rarity: i.rarity ?? "Common",
       amount: i.amount ?? null,
     }));
-    const { error } = await supabase.from("discoveries").insert(rows);
+    const { error } = await supabaseAdmin.from("discoveries").insert(rows);
     if (error) throw new Error(error.message);
     return { ok: true, xp: xpGain };
   });
 
 export const listMyDiscoveries = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
+  .inputValidator((raw: unknown) => z.object({ wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/) }).parse(raw ?? {}))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const profileId = walletToProfileId(data.wallet);
+    const { data: rows, error } = await supabaseAdmin
       .from("discoveries")
       .select("*")
-      .eq("user_id", context.userId)
+      .eq("user_id", profileId)
       .order("created_at", { ascending: false })
       .limit(200);
     if (error) throw new Error(error.message);
-    return data ?? [];
+    return rows ?? [];
   });
 
 /* -------------------- Leaderboard -------------------- */
@@ -101,11 +106,16 @@ export const getLeaderboard = createServerFn({ method: "GET" })
       auth: { persistSession: false, autoRefreshToken: false, storage: undefined },
     });
     const { data: rows, error } = await supa
-      .from("leaderboard_view")
-      .select("username, wallet, xp, packs_shredded, range")
-      .eq("range", data.range)
+      .from("profiles")
+      .select("username, wallet, xp, packs_shredded")
       .order("xp", { ascending: false })
       .limit(50);
     if (error) return [];
-    return rows ?? [];
+    return (rows ?? []).map((row) => ({ ...row, range: data.range })) as Array<{
+      username: string | null;
+      wallet: string | null;
+      xp: number;
+      packs_shredded: number;
+      range: string;
+    }>;
   });

@@ -13,6 +13,14 @@ import { rollUsdm, formatUsdm } from "@/lib/rewards";
 import { supabase } from "@/integrations/supabase/client";
 import { announceShred } from "@/lib/announce-shred.functions";
 import { distributeReward } from "@/lib/distribute-reward.functions";
+import { initializeFarcasterMiniApp } from "@/lib/farcaster";
+import {
+  upsertProfile,
+  getMyProfile,
+  recordShred,
+  listMyDiscoveries,
+  getLeaderboard,
+} from "@/lib/user-data.functions";
 import {
   PACK_KEY, PACK_PRICE_USDM, USDM_ADDRESS, PAYMENT_CONTRACT,
   PAYMENT_ABI, ERC20_ABI, CELO_CHAIN_ID,
@@ -59,6 +67,8 @@ export const CARD_LIBRARY: Record<string, string> = {
 };
 
 export const Route = createFileRoute("/")({ component: HomeScreen });
+
+const STARTER_PACK_COOLDOWN_MS = 12 * 60 * 60 * 1000;
 
 type Pack = {
   id: string; name: string; image: string; shredded: string;
@@ -186,6 +196,76 @@ type Discovery = {
   image?: string;
   amountRaw?: number;
 };
+
+type LeaderboardRow = { username: string | null; wallet: string | null; xp: number; packs_shredded: number; range: string };
+type ProfileSummary = { username: string | null; wallet: string | null; xp: number; packs_shredded: number; level: number };
+
+function getStarterCooldownKey(walletAddress: string | null | undefined) {
+  return walletAddress ? `shreds_starter_cd:${walletAddress.toLowerCase()}` : "shreds_starter_cd";
+}
+
+function canUseStarterPack(walletAddress: string | null | undefined) {
+  if (typeof window === "undefined") return true;
+  const key = getStarterCooldownKey(walletAddress);
+  const until = Number(localStorage.getItem(key) || "0");
+  return !until || Date.now() >= until;
+}
+
+function markStarterPackUsed(walletAddress: string | null | undefined) {
+  if (typeof window === "undefined") return;
+  const key = getStarterCooldownKey(walletAddress);
+  localStorage.setItem(key, String(Date.now() + STARTER_PACK_COOLDOWN_MS));
+}
+
+function toUiDiscovery(item: { kind: string; title: string; sub: string; rarity?: string | null; amount?: number | null }): Discovery {
+  const amount = typeof item.amount === "number" ? item.amount : undefined;
+  switch (item.kind) {
+    case "USDM":
+      return {
+        kind: "USDM",
+        title: item.title,
+        sub: item.sub,
+        color: "oklch(0.75 0.2 145)",
+        Icon: Wallet,
+        rarity: (item.rarity as Discovery["rarity"]) ?? "Common",
+        image: DISCOVERY_IMG.usdm,
+        amountRaw: amount,
+      };
+    case "XP":
+      return {
+        kind: "XP",
+        title: item.title,
+        sub: item.sub,
+        color: "oklch(0.7 0.2 250)",
+        Icon: Star,
+        rarity: (item.rarity as Discovery["rarity"]) ?? "Common",
+        image: DISCOVERY_IMG.xp,
+        amountRaw: amount,
+      };
+    case "CARD":
+      return {
+        kind: "CARD",
+        title: item.title,
+        sub: item.sub,
+        color: "oklch(0.75 0.18 180)",
+        Icon: Award,
+        rarity: (item.rarity as Discovery["rarity"]) ?? "Rare",
+        image: CARD_LIBRARY["neon-cube"],
+        amountRaw: amount,
+      };
+    default:
+      return {
+        kind: "FACT",
+        title: item.title,
+        sub: item.sub,
+        color: "oklch(0.7 0.22 300)",
+        Icon: Lightbulb,
+        rarity: "Common",
+        image: DISCOVERY_IMG.fact,
+        amountRaw: amount,
+      };
+  }
+}
 
 const XPS: Discovery[] = [
   { kind: "XP", title: "50 XP", sub: "Experience Points", color: "oklch(0.7 0.2 250)", Icon: Star, rarity: "Common", image: DISCOVERY_IMG.xp, amountRaw: 50 },
@@ -332,6 +412,10 @@ function HomeScreen() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [purchased, setPurchased] = useState<Set<string>>(new Set(["starter"]));
+  const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
+  const [profileSummary, setProfileSummary] = useState<ProfileSummary | null>(null);
+  const [leaderboardRange, setLeaderboardRange] = useState<"daily" | "weekly" | "monthly" | "all">("weekly");
+  const [starterCooldown, setStarterCooldown] = useState(false);
   const [buying, setBuying] = useState(false);
   const [buyError, setBuyError] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
@@ -342,21 +426,17 @@ function HomeScreen() {
   const wallet = useWallet();
   const callAnnounce = useServerFn(announceShred);
   const callDistribute = useServerFn(distributeReward);
+  const callUpsertProfile = useServerFn(upsertProfile);
+  const callGetMyProfile = useServerFn(getMyProfile);
+  const callGetLeaderboard = useServerFn(getLeaderboard);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!localStorage.getItem("shreds_onboarded")) setShowOnboarding(true);
     const u = localStorage.getItem("shreds_username");
     if (u) setUsername(u);
-    // Signal Farcaster hosts that the mini app is ready — hides the splash screen.
-    (async () => {
-      if (typeof window === "undefined") return;
-      try {
-        const path = "@farcaster/miniapp-sdk";
-        const mod = await import(/* @vite-ignore */ path);
-        await mod.sdk.actions.ready();
-      } catch { /* not running inside a Farcaster host — safe to ignore */ }
-    })();
+    setStarterCooldown(!canUseStarterPack(wallet.address));
+    void initializeFarcasterMiniApp();
     // Warm image cache so packs & discoveries render instantly on first shred.
     const warm = [
       ...Object.values(PACK_IMG), ...Object.values(SHREDDED_IMG),
@@ -375,7 +455,31 @@ function HomeScreen() {
       setUsername(name);
       try { localStorage.setItem("shreds_username", name); } catch { /* noop */ }
     });
+    if (wallet.address) {
+      void callUpsertProfile({ data: { wallet: wallet.address } }).catch(() => { /* non-fatal */ });
+    }
+    void callGetMyProfile({ data: { wallet: wallet.address } }).then((profile) => {
+      if (cancelled) return;
+      const nextProfile = profile as { username?: string | null; wallet?: string | null; xp?: number | null; packs_shredded?: number | null } | null;
+      if (nextProfile?.username) {
+        setUsername(nextProfile.username);
+        try { localStorage.setItem("shreds_username", nextProfile.username); } catch { /* noop */ }
+      }
+      if (nextProfile) {
+        setProfileSummary({
+          username: nextProfile.username ?? null,
+          wallet: nextProfile.wallet ?? wallet.address,
+          xp: Number(nextProfile.xp ?? 0),
+          packs_shredded: Number(nextProfile.packs_shredded ?? 0),
+          level: Math.max(1, Math.floor(Number(nextProfile.xp ?? 0) / 500) + 1),
+        });
+      }
+    }).catch(() => { /* non-fatal */ });
     return () => { cancelled = true; };
+  }, [wallet.address, callGetMyProfile]);
+
+  useEffect(() => {
+    setStarterCooldown(!canUseStarterPack(wallet.address));
   }, [wallet.address]);
 
   // Load stats + live feed and subscribe to realtime.
@@ -419,6 +523,13 @@ function HomeScreen() {
     return () => { cancelled = true; void supabase.removeChannel(ch); };
   }, []);
 
+  useEffect(() => {
+    if (!wallet.address) return;
+    void callGetLeaderboard({ data: { range: leaderboardRange } }).then((rows) => {
+      setLeaderboard((rows as LeaderboardRow[] | undefined) ?? []);
+    }).catch(() => { setLeaderboard([]); });
+  }, [leaderboardRange, wallet.address, callGetLeaderboard]);
+
   const finishOnboarding = () => {
     try { localStorage.setItem("shreds_onboarded", "1"); } catch { /* noop */ }
     setShowOnboarding(false);
@@ -430,6 +541,9 @@ function HomeScreen() {
     try { localStorage.setItem("shreds_username", name); } catch { /* noop */ }
     setUsername(name);
     setShowUsernameModal(false);
+    if (wallet.address) {
+      void callUpsertProfile({ data: { wallet: wallet.address, username: name } }).catch(() => { /* non-fatal */ });
+    }
     // continue to shredding flow
     setTimeout(() => { void startShredInner(); }, 200);
   };
@@ -447,6 +561,10 @@ function HomeScreen() {
 
   const executeShred = useCallback(() => {
     if (phase !== "idle") return;
+    if (pack.id === "starter" && !canUseStarterPack(wallet.address)) {
+      setBuyError("The free Starter Pack is on a 12-hour cooldown. Come back later for another free shred.");
+      return;
+    }
     const items = buildDiscoveries(pack.id);
     setReveals(items);
     audio.duckTheme();
@@ -457,19 +575,24 @@ function HomeScreen() {
       setPhase("revealing");
       setCollection((c) => [...items, ...c].slice(0, 60));
 
+      if (pack.id === "starter") {
+        markStarterPackUsed(wallet.address);
+        setStarterCooldown(true);
+      }
+
       // Announce to backend (updates stats + inserts live feed rows).
       const feedItems = items.map((i) => ({
         kind: i.kind,
         title: i.title,
+        sub: i.sub,
         amount: i.amountRaw,
       }));
       const label = username ?? (wallet.address ? shortAddr(wallet.address) : "Shredder");
-      void callAnnounce({ data: {
-        packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer",
-        wallet: wallet.address ?? null,
-        username: label,
-        items: feedItems,
-      } }).catch(() => { /* non-fatal */ });
+      void Promise.all([
+        callAnnounce({ data: { packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer", wallet: wallet.address ?? null, username: label, items: feedItems } }),
+        wallet.address ? recordShred({ data: { wallet: wallet.address, packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer", items: items.map((i) => ({ kind: i.kind, title: i.title, sub: i.sub, rarity: i.rarity, amount: i.amountRaw })) } }) : Promise.resolve({ ok: true }),
+        wallet.address ? callUpsertProfile({ data: { wallet: wallet.address, username: label } }) : Promise.resolve({ ok: true }),
+      ]).catch(() => { /* non-fatal */ });
 
       // Automatically transfer USDM reward from the rewarder wallet.
       const usdmItem = items.find((i) => i.kind === "USDM");
@@ -485,6 +608,10 @@ function HomeScreen() {
   }, [phase, pack.id, pack.name, username, wallet.address, callAnnounce, callDistribute]);
 
   const startShredInner = useCallback(async () => {
+    if (pack.id === "starter" && !canUseStarterPack(wallet.address)) {
+      setBuyError("The free Starter Pack is on a 12-hour cooldown. Come back later for another free shred.");
+      return;
+    }
     // If paid and not yet purchased, buy first
     if (pack.priceNum > 0 && !purchased.has(pack.id)) {
       if (!wallet.address) {
@@ -516,6 +643,10 @@ function HomeScreen() {
   }, [pack, purchased, wallet, executeShred]);
 
   const startShred = useCallback(async () => {
+    if (pack.id === "starter" && !canUseStarterPack(wallet.address)) {
+      setBuyError("The free Starter Pack is on a 12-hour cooldown. Come back later for another free shred.");
+      return;
+    }
     // First-time shredders must register a username before the flow continues.
     if (!username) {
       if (!wallet.address) {
@@ -669,13 +800,14 @@ function HomeScreen() {
         <RevealOverlay phase={phase} reveals={reveals} pack={pack} onClose={closeReveal} />
       )}
 
-      {showLeaderboard && <LeaderboardSheet onClose={() => setShowLeaderboard(false)} />}
+      {showLeaderboard && <LeaderboardSheet leaderboard={leaderboard} range={leaderboardRange} onRangeChange={setLeaderboardRange} onClose={() => setShowLeaderboard(false)} />}
       {showProfile && (
         <ProfileSheet
           onClose={() => setShowProfile(false)}
           wallet={wallet.address}
           collection={collection}
           username={username}
+          summary={profileSummary}
           onRegister={() => { setShowProfile(false); setShowUsernameModal(true); }}
         />
       )}
@@ -955,9 +1087,14 @@ function LiveTicker({ event, idx }: { event: LiveEvent; idx: number }) {
 
 /* -------------------- Leaderboard -------------------- */
 
-function LeaderboardSheet({ onClose }: { onClose: () => void }) {
+function LeaderboardSheet({ leaderboard, range, onRangeChange, onClose }: { leaderboard: LeaderboardRow[]; range: "daily" | "weekly" | "monthly" | "all"; onRangeChange: (range: "daily" | "weekly" | "monthly" | "all") => void; onClose: () => void }) {
   const tabs = ["Daily", "Weekly", "Monthly", "All Time"] as const;
-  const [tab, setTab] = useState<typeof tabs[number]>("Weekly");
+  const tabMap: Record<(typeof tabs)[number], "daily" | "weekly" | "monthly" | "all"> = {
+    Daily: "daily",
+    Weekly: "weekly",
+    Monthly: "monthly",
+    "All Time": "all",
+  };
 
   return (
     <Sheet title="Leaderboard" onClose={onClose} Icon={Trophy}>
@@ -965,21 +1102,35 @@ function LeaderboardSheet({ onClose }: { onClose: () => void }) {
         {tabs.map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 py-2 rounded-xl text-[10px] font-bold tracking-wider transition ${tab === t ? "bg-shred text-primary-foreground glow-shred" : "stat-card text-muted-foreground"}`}
+            onClick={() => onRangeChange(tabMap[t])}
+            className={`flex-1 py-2 rounded-xl text-[10px] font-bold tracking-wider transition ${range === tabMap[t] ? "bg-shred text-primary-foreground glow-shred" : "stat-card text-muted-foreground"}`}
           >{t.toUpperCase()}</button>
         ))}
       </div>
-      <EmptyState text={`No ${tab.toLowerCase()} rankings yet. Be the first to shred and claim the top spot.`} />
+      {leaderboard.length === 0 ? (
+        <EmptyState text="No rankings yet. Be the first to shred and claim the top spot." />
+      ) : (
+        <div className="space-y-2">
+          {leaderboard.map((row, index) => (
+            <div key={`${row.wallet ?? row.username ?? index}`} className="stat-card rounded-xl px-3 py-2 flex items-center gap-2">
+              <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-[11px] bg-shred/15 text-shred">#{index + 1}</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-sm truncate">{row.username ?? shortAddr(row.wallet)}</div>
+                <div className="text-[10px] text-muted-foreground">{row.packs_shredded} packs · {row.xp} XP</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </Sheet>
   );
 }
 
 /* -------------------- Profile -------------------- */
 
-function ProfileSheet({ onClose, wallet, collection, username, onRegister }: {
+function ProfileSheet({ onClose, wallet, collection, username, summary, onRegister }: {
   onClose: () => void; wallet: string | null; collection: Discovery[];
-  username: string | null; onRegister: () => void;
+  username: string | null; summary: ProfileSummary | null; onRegister: () => void;
 }) {
   const cards = collection.filter(c => c.kind === "CARD");
   const facts = collection.filter(c => c.kind === "FACT");
@@ -994,8 +1145,8 @@ function ProfileSheet({ onClose, wallet, collection, username, onRegister }: {
           <div className="font-display text-xl truncate">{username ? username.toUpperCase() : "UNCLAIMED"}</div>
           <div className="text-[11px] text-muted-foreground truncate">{wallet ? shortAddr(wallet) : "Wallet not connected"}</div>
           {(() => {
-            const xp = collection.filter(c => c.kind === "XP").reduce((s, c) => s + (c.amountRaw ?? 0), 0);
-            const level = Math.max(1, Math.floor(xp / 500) + 1);
+            const xp = summary?.xp ?? collection.filter(c => c.kind === "XP").reduce((s, c) => s + (c.amountRaw ?? 0), 0);
+            const level = summary?.level ?? Math.max(1, Math.floor(xp / 500) + 1);
             const into = xp % 500;
             return (
               <>
