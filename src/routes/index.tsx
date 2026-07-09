@@ -12,7 +12,6 @@ import { audio } from "@/lib/audio";
 import { rollUsdm, formatUsdm } from "@/lib/rewards";
 import { announceShred } from "@/lib/announce-shred.functions";
 import { distributeReward } from "@/lib/distribute-reward.functions";
-import { initializeFarcasterMiniApp } from "@/lib/farcaster";
 import {
   upsertProfile,
   getMyProfile,
@@ -687,7 +686,6 @@ function HomeScreen() {
     const active = !!until && until > Date.now();
     setStarterCooldown(active);
     setStarterCooldownUntil(active ? until : null);
-    void initializeFarcasterMiniApp();
     // Warm image cache so packs & discoveries render instantly on first shred.
     const warm = [
       ...Object.values(PACK_IMG), ...Object.values(SHREDDED_IMG),
