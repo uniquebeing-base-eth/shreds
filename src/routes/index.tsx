@@ -10,7 +10,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { useWallet, shortAddr } from "@/lib/wallet";
 import { audio } from "@/lib/audio";
 import { rollUsdm, formatUsdm } from "@/lib/rewards";
-import { supabase } from "@/integrations/supabase/client";
 import { announceShred } from "@/lib/announce-shred.functions";
 import { distributeReward } from "@/lib/distribute-reward.functions";
 import { initializeFarcasterMiniApp } from "@/lib/farcaster";
@@ -20,6 +19,7 @@ import {
   recordShred,
   listMyDiscoveries,
   getLeaderboard,
+  getStatsAndFeed,
 } from "@/lib/user-data.functions";
 import {
   PACK_KEY, PACK_PRICE_USDM, USDM_ADDRESS, PAYMENT_CONTRACT,
@@ -550,6 +550,7 @@ function HomeScreen() {
   const callUpsertProfile = useServerFn(upsertProfile);
   const callGetMyProfile = useServerFn(getMyProfile);
   const callGetLeaderboard = useServerFn(getLeaderboard);
+  const callGetStatsAndFeed = useServerFn(getStatsAndFeed);
 
   const refreshProfileAndLeaderboard = useCallback(async () => {
     const storedProfiles = readStoredProfiles();
@@ -593,6 +594,48 @@ function HomeScreen() {
       setLeaderboard(fallbackRows);
     }
   }, [wallet.address, leaderboardRange, callGetMyProfile, callGetLeaderboard]);
+
+  const refreshStatsAndFeed = useCallback(async () => {
+    try {
+      const snapshot = await callGetStatsAndFeed({ data: {} });
+      const nextSnapshot = snapshot as {
+        packStats?: Record<string, { owners: number; shreds: number; drops: number }>;
+        globalStats?: { shredders: number; packs_shredded: number; discoveries: number; rewards_usdm: number };
+        liveFeed?: Array<{ username: string; wallet: string | null; pack_id: string | null; kind: string; text: string; amount: number | string | null }>;
+      };
+
+      if (nextSnapshot.packStats && Object.keys(nextSnapshot.packStats).length > 0) {
+        setPackStats((prev) => {
+          const next = { ...prev, ...nextSnapshot.packStats };
+          writeStoredPackStats(next);
+          return next;
+        });
+      }
+
+      if (nextSnapshot.globalStats) {
+        setGlobalStats((prev) => {
+          const next = { ...prev, ...nextSnapshot.globalStats };
+          if (
+            next.packs_shredded > 0 ||
+            next.shredders > 0 ||
+            next.discoveries > 0 ||
+            next.rewards_usdm > 0
+          ) {
+            writeStoredGlobalStats(next);
+          }
+          return next;
+        });
+      }
+
+      if (nextSnapshot.liveFeed && nextSnapshot.liveFeed.length > 0) {
+        const events = nextSnapshot.liveFeed.map((r) => feedRowToEvent(r)).reverse().reverse();
+        setLiveEvents(events);
+        writeStoredLiveEvents(events);
+      }
+    } catch (error) {
+      console.error("[stats] failed to refresh shared stats", error);
+    }
+  }, [callGetStatsAndFeed]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -661,74 +704,23 @@ function HomeScreen() {
     setStarterCooldownUntil(active ? until : null);
   }, [wallet.address]);
 
-  // Load stats + live feed and subscribe to realtime.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      const [{ data: ps }, { data: gs }, { data: lf }] = await Promise.all([
-        supabase.from("pack_stats").select("pack_id,owners,shreds,drops"),
-        supabase.from("global_stats").select("shredders,packs_shredded,discoveries,rewards_usdm").eq("id", 1).maybeSingle(),
-        supabase.from("live_feed").select("username,wallet,pack_id,kind,text,amount").order("created_at", { ascending: false }).limit(30),
-      ]);
+    const runRefresh = async () => {
       if (cancelled) return;
-      if (Array.isArray(ps) && ps.length > 0) {
-        const map: Record<string, { owners: number; shreds: number; drops: number }> = {};
-        ps.forEach((r) => { map[r.pack_id] = { owners: r.owners, shreds: r.shreds, drops: r.drops }; });
-        setPackStats((prev) => {
-          const next = { ...prev, ...map };
-          if (Object.keys(next).length > 0) {
-            writeStoredPackStats(next);
-          }
-          return next;
-        });
-      }
-      if (gs) {
-        const nextGlobalStats = { shredders: gs.shredders, packs_shredded: gs.packs_shredded, discoveries: gs.discoveries, rewards_usdm: Number(gs.rewards_usdm) };
-        setGlobalStats((prev) => {
-          const next = { ...prev, ...nextGlobalStats };
-          if (
-            next.packs_shredded > 0 ||
-            next.shredders > 0 ||
-            next.discoveries > 0 ||
-            next.rewards_usdm > 0
-          ) {
-            writeStoredGlobalStats(next);
-          }
-          return next;
-        });
-      }
-      if (lf) {
-        const events = lf.map((r) => feedRowToEvent(r)).reverse().reverse(); // newest first
-        setLiveEvents(events);
-        writeStoredLiveEvents(events);
-      }
-    })();
+      await refreshStatsAndFeed();
+    };
 
-    const ch = supabase
-      .channel("shreds-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "pack_stats" }, (payload) => {
-        const r = payload.new as { pack_id: string; owners: number; shreds: number; drops: number };
-        setPackStats((prev) => {
-          const next = { ...prev, [r.pack_id]: { owners: r.owners, shreds: r.shreds, drops: r.drops } };
-          writeStoredPackStats(next);
-          return next;
-        });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "global_stats" }, (payload) => {
-        const r = payload.new as { shredders: number; packs_shredded: number; discoveries: number; rewards_usdm: number | string };
-        const next = { shredders: r.shredders, packs_shredded: r.packs_shredded, discoveries: r.discoveries, rewards_usdm: Number(r.rewards_usdm) };
-        setGlobalStats(next);
-        writeStoredGlobalStats(next);
-      })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "live_feed" }, (payload) => {
-        const r = payload.new as FeedRow;
-        setLiveEvents((prev) => [feedRowToEvent(r), ...prev].slice(0, 30));
-        setTickerIdx(0);
-      })
-      .subscribe();
+    void runRefresh();
+    const interval = window.setInterval(() => {
+      void runRefresh();
+    }, 10000);
 
-    return () => { cancelled = true; void supabase.removeChannel(ch); };
-  }, []);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [refreshStatsAndFeed]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -912,6 +904,7 @@ function HomeScreen() {
         wallet.address ? callUpsertProfile({ data: { wallet: wallet.address, username: label } }) : Promise.resolve({ ok: true }),
       ]).then(() => {
         void refreshProfileAndLeaderboard();
+        void refreshStatsAndFeed();
       }).catch(() => { /* non-fatal */ });
 
       // Automatically transfer USDM reward from the rewarder wallet.

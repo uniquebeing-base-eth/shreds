@@ -123,6 +123,51 @@ export const listMyDiscoveries = createServerFn({ method: "GET" })
     return rows ?? [];
   });
 
+export const getStatsAndFeed = createServerFn({ method: "GET" })
+  .inputValidator((raw: unknown) => z.object({}).parse(raw ?? {}))
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const [{ data: packRows, error: packError }, { data: globalRow, error: globalError }, { data: feedRows, error: feedError }] = await Promise.all([
+      supabaseAdmin.from("pack_stats").select("pack_id,owners,shreds,drops").order("pack_id"),
+      supabaseAdmin.from("global_stats").select("shredders,packs_shredded,discoveries,rewards_usdm").eq("id", 1).maybeSingle(),
+      supabaseAdmin.from("live_feed").select("username,wallet,pack_id,kind,text,amount").order("created_at", { ascending: false }).limit(30),
+    ]);
+
+    if (packError) throw new Error(packError.message);
+    if (globalError) throw new Error(globalError.message);
+    if (feedError) throw new Error(feedError.message);
+
+    const packStats = (packRows ?? []).reduce<Record<string, { owners: number; shreds: number; drops: number }>>((acc, row) => {
+      acc[row.pack_id] = {
+        owners: Number(row.owners ?? 0),
+        shreds: Number(row.shreds ?? 0),
+        drops: Number(row.drops ?? 0),
+      };
+      return acc;
+    }, {});
+
+    const globalStats = {
+      shredders: Number(globalRow?.shredders ?? 0),
+      packs_shredded: Number(globalRow?.packs_shredded ?? 0),
+      discoveries: Number(globalRow?.discoveries ?? 0),
+      rewards_usdm: Number(globalRow?.rewards_usdm ?? 0),
+    };
+
+    return {
+      packStats,
+      globalStats,
+      liveFeed: (feedRows ?? []).map((row) => ({
+        username: row.username,
+        wallet: row.wallet,
+        pack_id: row.pack_id,
+        kind: row.kind,
+        text: row.text,
+        amount: row.amount,
+      })),
+    };
+  });
+
 /* -------------------- Leaderboard -------------------- */
 
 export const getLeaderboard = createServerFn({ method: "GET" })
