@@ -217,6 +217,63 @@ function markStarterPackUsed(walletAddress: string | null | undefined) {
   localStorage.setItem(key, String(Date.now() + STARTER_PACK_COOLDOWN_MS));
 }
 
+function readLocalJson<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeLocalJson<T>(key: string, value: T) {
+  if (typeof window === "undefined") return;
+  try { window.localStorage.setItem(key, JSON.stringify(value)); } catch { /* noop */ }
+}
+
+type StoredProfile = { username: string | null; wallet: string | null; xp: number; packs_shredded: number; level: number };
+
+function readStoredProfiles(): Record<string, StoredProfile> {
+  return readLocalJson<Record<string, StoredProfile>>("shreds_local_profiles", {});
+}
+
+function writeStoredProfiles(profiles: Record<string, StoredProfile>) {
+  writeLocalJson("shreds_local_profiles", profiles);
+}
+
+function upsertStoredProfile(wallet: string | null | undefined, profile: StoredProfile) {
+  if (!wallet) return;
+  const key = wallet.toLowerCase();
+  const profiles = readStoredProfiles();
+  profiles[key] = profile;
+  writeStoredProfiles(profiles);
+}
+
+function readStoredPackStats() {
+  return readLocalJson<Record<string, { owners: number; shreds: number; drops: number }>>("shreds_local_pack_stats", {});
+}
+
+function writeStoredPackStats(stats: Record<string, { owners: number; shreds: number; drops: number }>) {
+  writeLocalJson("shreds_local_pack_stats", stats);
+}
+
+function readStoredGlobalStats() {
+  return readLocalJson<{ shredders: number; packs_shredded: number; discoveries: number; rewards_usdm: number }>("shreds_local_global_stats", { shredders: 0, packs_shredded: 0, discoveries: 0, rewards_usdm: 0 });
+}
+
+function writeStoredGlobalStats(stats: { shredders: number; packs_shredded: number; discoveries: number; rewards_usdm: number }) {
+  writeLocalJson("shreds_local_global_stats", stats);
+}
+
+function buildLeaderboardFromProfiles(profiles: Record<string, StoredProfile>): LeaderboardRow[] {
+  return Object.values(profiles)
+    .filter((p) => (p.xp ?? 0) > 0 || (p.packs_shredded ?? 0) > 0)
+    .sort((a, b) => (b.xp ?? 0) - (a.xp ?? 0) || (b.packs_shredded ?? 0) - (a.packs_shredded ?? 0))
+    .slice(0, 50)
+    .map((p) => ({ username: p.username, wallet: p.wallet, xp: p.xp, packs_shredded: p.packs_shredded, range: "all" }));
+}
+
 function toUiDiscovery(item: { kind: string; title: string; sub: string; rarity?: string | null; amount?: number | null }): Discovery {
   const amount = typeof item.amount === "number" ? item.amount : undefined;
   switch (item.kind) {
@@ -442,27 +499,45 @@ function HomeScreen() {
   const callGetLeaderboard = useServerFn(getLeaderboard);
 
   const refreshProfileAndLeaderboard = useCallback(async () => {
-    if (!wallet.address) return;
-    try {
-      const profile = await callGetMyProfile({ data: { wallet: wallet.address } });
-      const nextProfile = profile as { username?: string | null; wallet?: string | null; xp?: number | null; packs_shredded?: number | null } | null;
-      if (nextProfile?.username) {
-        setUsername(nextProfile.username);
-        try { localStorage.setItem("shreds_username", nextProfile.username); } catch { /* noop */ }
+    const storedProfiles = readStoredProfiles();
+    if (wallet.address) {
+      const storedProfile = storedProfiles[wallet.address.toLowerCase()];
+      if (storedProfile) {
+        setProfileSummary(storedProfile);
       }
-      if (nextProfile) {
-        setProfileSummary({
-          username: nextProfile.username ?? null,
-          wallet: nextProfile.wallet ?? wallet.address,
-          xp: Number(nextProfile.xp ?? 0),
-          packs_shredded: Number(nextProfile.packs_shredded ?? 0),
-          level: Math.max(1, Math.floor(Number(nextProfile.xp ?? 0) / 500) + 1),
-        });
+    }
+
+    try {
+      if (wallet.address) {
+        const profile = await callGetMyProfile({ data: { wallet: wallet.address } });
+        const nextProfile = profile as { username?: string | null; wallet?: string | null; xp?: number | null; packs_shredded?: number | null } | null;
+        if (nextProfile?.username) {
+          setUsername(nextProfile.username);
+          try { localStorage.setItem("shreds_username", nextProfile.username); } catch { /* noop */ }
+        }
+        if (nextProfile) {
+          const normalizedProfile: StoredProfile = {
+            username: nextProfile.username ?? null,
+            wallet: nextProfile.wallet ?? wallet.address,
+            xp: Number(nextProfile.xp ?? 0),
+            packs_shredded: Number(nextProfile.packs_shredded ?? 0),
+            level: Math.max(1, Math.floor(Number(nextProfile.xp ?? 0) / 500) + 1),
+          };
+          setProfileSummary(normalizedProfile);
+          upsertStoredProfile(wallet.address, normalizedProfile);
+        }
       }
       const rows = await callGetLeaderboard({ data: { range: leaderboardRange } });
-      setLeaderboard((rows as LeaderboardRow[] | undefined) ?? []);
+      const nextRows = (rows as LeaderboardRow[] | undefined) ?? [];
+      if (nextRows.length > 0) {
+        setLeaderboard(nextRows);
+      } else {
+        const fallbackRows = buildLeaderboardFromProfiles(storedProfiles);
+        setLeaderboard(fallbackRows);
+      }
     } catch {
-      setLeaderboard([]);
+      const fallbackRows = buildLeaderboardFromProfiles(storedProfiles);
+      setLeaderboard(fallbackRows);
     }
   }, [wallet.address, leaderboardRange, callGetMyProfile, callGetLeaderboard]);
 
@@ -471,6 +546,12 @@ function HomeScreen() {
     if (!localStorage.getItem("shreds_onboarded")) setShowOnboarding(true);
     const u = localStorage.getItem("shreds_username");
     if (u) setUsername(u);
+    const storedPackStats = readStoredPackStats();
+    const storedGlobalStats = readStoredGlobalStats();
+    if (Object.keys(storedPackStats).length > 0) setPackStats(storedPackStats);
+    if (storedGlobalStats.packs_shredded > 0 || storedGlobalStats.shredders > 0 || storedGlobalStats.discoveries > 0) {
+      setGlobalStats(storedGlobalStats);
+    }
     const until = Number(localStorage.getItem(getStarterCooldownKey(wallet.address)) || "0");
     const active = !!until && until > Date.now();
     setStarterCooldown(active);
@@ -522,8 +603,13 @@ function HomeScreen() {
         const map: Record<string, { owners: number; shreds: number; drops: number }> = {};
         ps.forEach((r) => { map[r.pack_id] = { owners: r.owners, shreds: r.shreds, drops: r.drops }; });
         setPackStats(map);
+        writeStoredPackStats(map);
       }
-      if (gs) setGlobalStats({ shredders: gs.shredders, packs_shredded: gs.packs_shredded, discoveries: gs.discoveries, rewards_usdm: Number(gs.rewards_usdm) });
+      if (gs) {
+        const nextGlobalStats = { shredders: gs.shredders, packs_shredded: gs.packs_shredded, discoveries: gs.discoveries, rewards_usdm: Number(gs.rewards_usdm) };
+        setGlobalStats(nextGlobalStats);
+        writeStoredGlobalStats(nextGlobalStats);
+      }
       if (lf) {
         setLiveEvents(lf.map((r) => feedRowToEvent(r)).reverse().reverse()); // newest first
       }
@@ -634,27 +720,63 @@ function HomeScreen() {
       const label = username ?? (wallet.address ? shortAddr(wallet.address) : "Shredder");
       const xpGain = items.reduce((sum, i) => sum + ((i.kind === "XP" && typeof i.amountRaw === "number") ? i.amountRaw : 0), 0);
       const rewardsUsdm = items.reduce((sum, i) => sum + ((i.kind === "USDM" && typeof i.amountRaw === "number") ? i.amountRaw : 0), 0);
-      setPackStats((prev) => ({
-        ...prev,
-        [pack.id]: {
-          owners: (prev[pack.id]?.owners ?? 0) + 1,
-          shreds: (prev[pack.id]?.shreds ?? 0) + 1,
-          drops: (prev[pack.id]?.drops ?? 0) + items.length,
-        },
-      }));
-      setGlobalStats((prev) => ({
-        ...prev,
-        packs_shredded: prev.packs_shredded + 1,
-        discoveries: prev.discoveries + items.length,
-        rewards_usdm: prev.rewards_usdm + rewardsUsdm,
-        shredders: prev.shredders + (wallet.address ? 1 : 0),
-      }));
-      setProfileSummary((prev) => prev ? {
-        ...prev,
-        xp: prev.xp + xpGain,
-        packs_shredded: prev.packs_shredded + 1,
-        level: Math.max(1, Math.floor((prev.xp + xpGain) / 500) + 1),
-      } : null);
+      setPackStats((prev) => {
+        const next = {
+          ...prev,
+          [pack.id]: {
+            owners: (prev[pack.id]?.owners ?? 0) + 1,
+            shreds: (prev[pack.id]?.shreds ?? 0) + 1,
+            drops: (prev[pack.id]?.drops ?? 0) + items.length,
+          },
+        };
+        writeStoredPackStats(next);
+        return next;
+      });
+      setGlobalStats((prev) => {
+        const next = {
+          ...prev,
+          packs_shredded: prev.packs_shredded + 1,
+          discoveries: prev.discoveries + items.length,
+          rewards_usdm: prev.rewards_usdm + rewardsUsdm,
+          shredders: prev.shredders + (wallet.address ? 1 : 0),
+        };
+        writeStoredGlobalStats(next);
+        return next;
+      });
+      setProfileSummary((prev) => {
+        const next = prev ? {
+          ...prev,
+          xp: prev.xp + xpGain,
+          packs_shredded: prev.packs_shredded + 1,
+          level: Math.max(1, Math.floor((prev.xp + xpGain) / 500) + 1),
+        } : {
+          username: username ?? null,
+          wallet: wallet.address ?? null,
+          xp: xpGain,
+          packs_shredded: 1,
+          level: Math.max(1, Math.floor(xpGain / 500) + 1),
+        };
+        if (wallet.address) {
+          upsertStoredProfile(wallet.address, next);
+        }
+        return next;
+      });
+      setLeaderboard((prev) => {
+        const profiles = readStoredProfiles();
+        if (wallet.address) {
+          const nextProfile = {
+            username: username ?? prev[0]?.username ?? null,
+            wallet: wallet.address,
+            xp: (prev.find((row) => row.wallet?.toLowerCase() === wallet.address.toLowerCase())?.xp ?? 0) + xpGain,
+            packs_shredded: (prev.find((row) => row.wallet?.toLowerCase() === wallet.address.toLowerCase())?.packs_shredded ?? 0) + 1,
+            level: Math.max(1, Math.floor(((prev.find((row) => row.wallet?.toLowerCase() === wallet.address.toLowerCase())?.xp ?? 0) + xpGain) / 500) + 1),
+          };
+          profiles[wallet.address.toLowerCase()] = nextProfile;
+          writeStoredProfiles(profiles);
+          return buildLeaderboardFromProfiles(profiles);
+        }
+        return prev;
+      });
       void Promise.all([
         callAnnounce({ data: { packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer", wallet: wallet.address ?? null, username: label, items: feedItems } }),
         wallet.address ? recordShred({ data: { wallet: wallet.address, packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer", items: items.map((i) => ({ kind: i.kind, title: i.title, sub: i.sub, rarity: i.rarity, amount: i.amountRaw })) } }) : Promise.resolve({ ok: true }),
