@@ -11,16 +11,17 @@ type Eth = {
 };
 
 // Cached Farcaster provider (loaded lazily to avoid SSR issues).
+const FARCASTER_SDK_URL = "https://esm.sh/@farcaster/miniapp-sdk@0.3.0";
 let fcProvider: Eth | null = null;
 async function loadFarcasterProvider(): Promise<Eth | null> {
   if (typeof window === "undefined") return null;
   if (fcProvider) return fcProvider;
   try {
-    const farcasterModuleId = ["@farcaster", "miniapp-sdk"].join("/");
-    const mod = await import(/* @vite-ignore */ farcasterModuleId);
-    const sdk = mod.sdk;
-    const p = (await sdk.wallet.getEthereumProvider()) as Eth | null;
-    if (p) { (p as Eth).isFarcaster = true; fcProvider = p; }
+    const mod = await import(/* @vite-ignore */ FARCASTER_SDK_URL);
+    const sdk = (mod as { sdk?: unknown; default?: unknown }).sdk ??
+      (mod as { default?: unknown }).default;
+    const provider = (await (sdk as { wallet?: { getEthereumProvider?: () => Promise<unknown> } }).wallet?.getEthereumProvider?.()) as Eth | null;
+    if (provider) { (provider as Eth).isFarcaster = true; fcProvider = provider; }
     return fcProvider;
   } catch { return null; }
 }
