@@ -857,6 +857,26 @@ function HomeScreen() {
       const label = username ?? (wallet.address ? shortAddr(wallet.address) : "Shredder");
       const xpGain = items.reduce((sum, i) => sum + ((i.kind === "XP" && typeof i.amountRaw === "number") ? i.amountRaw : 0), 0);
       const rewardsUsdm = items.reduce((sum, i) => sum + ((i.kind === "USDM" && typeof i.amountRaw === "number") ? i.amountRaw : 0), 0);
+      const optimisticFeedRows = items
+        .filter((i) => i.kind !== "XP")
+        .map((i) => ({
+          username: label,
+          wallet: wallet.address?.toLowerCase() ?? null,
+          pack_id: pack.id,
+          kind: i.kind,
+          text: i.kind === "USDM" || i.kind === "USDT"
+            ? `discovered ${i.amountRaw?.toFixed(i.amountRaw && i.amountRaw < 0.01 ? 3 : 2)} ${i.kind}`
+            : i.kind === "CARD"
+            ? `collected ${i.title}`
+            : "discovered a fact",
+          amount: i.amountRaw ?? null,
+        }));
+      setLiveEvents((prev) => {
+        const next = [...optimisticFeedRows.map((row) => feedRowToEvent(row)), ...prev].slice(0, 30);
+        writeStoredLiveEvents(next);
+        return next;
+      });
+      setTickerIdx(0);
       setPackStats((prev) => {
         const next = {
           ...prev,
