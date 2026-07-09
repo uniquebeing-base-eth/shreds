@@ -546,6 +546,11 @@ function HomeScreen() {
     if (!localStorage.getItem("shreds_onboarded")) setShowOnboarding(true);
     const u = localStorage.getItem("shreds_username");
     if (u) setUsername(u);
+    const storedProfiles = readStoredProfiles();
+    const storedProfile = wallet.address ? storedProfiles[wallet.address.toLowerCase()] : null;
+    if (storedProfile) {
+      setProfileSummary(storedProfile);
+    }
     const storedPackStats = readStoredPackStats();
     const storedGlobalStats = readStoredGlobalStats();
     if (Object.keys(storedPackStats).length > 0) setPackStats(storedPackStats);
@@ -599,7 +604,7 @@ function HomeScreen() {
         supabase.from("live_feed").select("username,wallet,pack_id,kind,text,amount").order("created_at", { ascending: false }).limit(30),
       ]);
       if (cancelled) return;
-      if (ps) {
+      if (Array.isArray(ps) && ps.length > 0) {
         const map: Record<string, { owners: number; shreds: number; drops: number }> = {};
         ps.forEach((r) => { map[r.pack_id] = { owners: r.owners, shreds: r.shreds, drops: r.drops }; });
         setPackStats(map);
