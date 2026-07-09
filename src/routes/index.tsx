@@ -258,6 +258,14 @@ function writeStoredPackStats(stats: Record<string, { owners: number; shreds: nu
   writeLocalJson("shreds_local_pack_stats", stats);
 }
 
+function readStoredLiveEvents(): LiveEvent[] {
+  return readLocalJson<LiveEvent[]>("shreds_local_live_events", []);
+}
+
+function writeStoredLiveEvents(events: LiveEvent[]) {
+  writeLocalJson("shreds_local_live_events", events);
+}
+
 type StoredDiscovery = Omit<Discovery, "Icon">;
 
 function readStoredCollection(): StoredDiscovery[] {
@@ -524,9 +532,18 @@ function HomeScreen() {
   const [buyError, setBuyError] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [showUsernameModal, setShowUsernameModal] = useState(false);
-  const [liveEvents, setLiveEvents] = useState<LiveEvent[]>(LIVE_EVENTS_SEED);
-  const [packStats, setPackStats] = useState<Record<string, { owners: number; shreds: number; drops: number }>>({});
-  const [globalStats, setGlobalStats] = useState<{ shredders: number; packs_shredded: number; discoveries: number; rewards_usdm: number }>({ shredders: 0, packs_shredded: 0, discoveries: 0, rewards_usdm: 0 });
+  const [liveEvents, setLiveEvents] = useState<LiveEvent[]>(() => {
+    if (typeof window === "undefined") return LIVE_EVENTS_SEED;
+    return readStoredLiveEvents();
+  });
+  const [packStats, setPackStats] = useState<Record<string, { owners: number; shreds: number; drops: number }>>(() => {
+    if (typeof window === "undefined") return {};
+    return readStoredPackStats();
+  });
+  const [globalStats, setGlobalStats] = useState<{ shredders: number; packs_shredded: number; discoveries: number; rewards_usdm: number }>(() => {
+    if (typeof window === "undefined") return { shredders: 0, packs_shredded: 0, discoveries: 0, rewards_usdm: 0 };
+    return readStoredGlobalStats();
+  });
   const wallet = useWallet();
   const callAnnounce = useServerFn(announceShred);
   const callDistribute = useServerFn(distributeReward);
@@ -590,6 +607,7 @@ function HomeScreen() {
     const storedPackStats = readStoredPackStats();
     const storedGlobalStats = readStoredGlobalStats();
     const storedCollection = readStoredCollection();
+    const storedEvents = readStoredLiveEvents();
     if (Object.keys(storedPackStats).length > 0) setPackStats(storedPackStats);
     if (
       storedGlobalStats.packs_shredded > 0 ||
@@ -601,6 +619,9 @@ function HomeScreen() {
     }
     if (storedCollection.length > 0) {
       setCollection(storedCollection.map(hydrateDiscovery));
+    }
+    if (storedEvents.length > 0) {
+      setLiveEvents(storedEvents);
     }
     setHydrated(true);
     const until = Number(localStorage.getItem(getStarterCooldownKey(wallet.address)) || "0");
@@ -654,7 +675,7 @@ function HomeScreen() {
         const map: Record<string, { owners: number; shreds: number; drops: number }> = {};
         ps.forEach((r) => { map[r.pack_id] = { owners: r.owners, shreds: r.shreds, drops: r.drops }; });
         setPackStats((prev) => {
-          const next = Object.keys(map).length > 0 ? map : prev;
+          const next = { ...prev, ...map };
           if (Object.keys(next).length > 0) {
             writeStoredPackStats(next);
           }
@@ -664,16 +685,12 @@ function HomeScreen() {
       if (gs) {
         const nextGlobalStats = { shredders: gs.shredders, packs_shredded: gs.packs_shredded, discoveries: gs.discoveries, rewards_usdm: Number(gs.rewards_usdm) };
         setGlobalStats((prev) => {
-          const next = nextGlobalStats;
+          const next = { ...prev, ...nextGlobalStats };
           if (
             next.packs_shredded > 0 ||
             next.shredders > 0 ||
             next.discoveries > 0 ||
-            next.rewards_usdm > 0 ||
-            prev.packs_shredded > 0 ||
-            prev.shredders > 0 ||
-            prev.discoveries > 0 ||
-            prev.rewards_usdm > 0
+            next.rewards_usdm > 0
           ) {
             writeStoredGlobalStats(next);
           }
@@ -681,7 +698,9 @@ function HomeScreen() {
         });
       }
       if (lf) {
-        setLiveEvents(lf.map((r) => feedRowToEvent(r)).reverse().reverse()); // newest first
+        const events = lf.map((r) => feedRowToEvent(r)).reverse().reverse(); // newest first
+        setLiveEvents(events);
+        writeStoredLiveEvents(events);
       }
     })();
 
@@ -734,6 +753,11 @@ function HomeScreen() {
     if (!hydrated) return;
     writeStoredCollection(collection.map(dehydrateDiscovery));
   }, [collection, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    writeStoredLiveEvents(liveEvents);
+  }, [liveEvents, hydrated]);
 
   useEffect(() => {
     if (!wallet.address || !profileSummary) return;
