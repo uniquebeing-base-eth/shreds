@@ -15,8 +15,8 @@
     "splashImageUrl": "https://shred.signalify.xyz/splash.png",
     "splashBackgroundColor": "#0a0f0a",
     "webhookUrl": "https://shred.signalify.xyz/api/webhook",
-    "subtitle": "Discover Collect and Earn on Celo",
-    "description": "Shred packs discover rewards collect cards on Celo",
+    "subtitle": "Shred Earn and Collect",
+    "description": "Shred packs earn rewards and collect on Celo",
     "primaryCategory": "games",
     "tags": [
       "shreds",
@@ -26,9 +26,9 @@
       "collectibles"
     ],
     "heroImageUrl": "https://shred.signalify.xyz/image.png",
-    "tagline": "Discover Collect and Earn on Celo",
+    "tagline": "Shred Earn and Collect",
     "ogTitle": "Shreds",
-    "ogDescription": "Pack shredding and stablecoin rewards",
+    "ogDescription": "Collect packs and earn rewards",
     "ogImageUrl": "https://shred.signalify.xyz/image.png"
   },
   "baseBuilder": {
