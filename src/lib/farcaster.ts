@@ -5,34 +5,29 @@ export async function initializeFarcasterMiniApp(): Promise<boolean> {
   if (farcasterReadyPromise) return farcasterReadyPromise;
 
   farcasterReadyPromise = (async () => {
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      try {
-        const mod = await import(/* @vite-ignore */ "@farcaster/miniapp-sdk");
-        const sdk = (mod as { sdk?: unknown; default?: unknown }).sdk ??
-          (mod as { default?: unknown }).default;
+    try {
+      const mod = await import("[@farcaster](https://farcaster.xyz/farcaster)/miniapp-sdk");
 
-        if (!sdk || typeof sdk !== "object") {
-          throw new Error("sdk-unavailable");
-        }
+      const sdk = (mod as {
+        sdk?: {
+          actions?: {
+            ready?: () => Promise<void> | void;
+          };
+        };
+      }).sdk;
 
-        const ready = (sdk as {
-          actions?: { ready?: (options?: Record<string, unknown>) => unknown };
-          ready?: (options?: Record<string, unknown>) => unknown;
-        }).actions?.ready ?? (sdk as { ready?: (options?: Record<string, unknown>) => unknown }).ready;
-
-        if (typeof ready !== "function") {
-          throw new Error("ready-unavailable");
-        }
-
-        await ready();
-        return true;
-      } catch {
-        if (attempt === 7) break;
-        await new Promise((resolve) => window.setTimeout(resolve, 200 + attempt * 200));
+      if (typeof sdk?.actions?.ready !== "function") {
+        console.error("Farcaster Mini App SDK ready action unavailable");
+        return false;
       }
-    }
 
-    return false;
+      await sdk.actions.ready();
+
+      return true;
+    } catch (error) {
+      console.error("Failed to initialize Farcaster Mini App", error);
+      return false;
+    }
   })();
 
   return farcasterReadyPromise;
