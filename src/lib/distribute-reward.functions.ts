@@ -2,15 +2,16 @@
 // Uses BACKEND_SIGNER_KEY on Celo mainnet. The signer must be allow-listed on
 // the RewardDistributor contract (rewarders[signer] == true).
 //
-// Security:
-//   - requireSupabaseAuth: only signed-in users can call.
-//   - Amount is rolled SERVER-SIDE from the pack tier; client amountUsdm is ignored.
-//   - Replay protection is enforced ON-CHAIN via claimId (deterministic per user+nonce).
-//   - Pre-flight checks: rewarder allow-list, USDM treasury balance, claimId not used.
+// Auth model (wallet-only app — NO Lovable Cloud session required):
+//   - Caller supplies { wallet, packId, amountUsdm, nonce }.
+//   - Server clamps amountUsdm to a per-pack ceiling as defence-in-depth.
+//   - claimId = keccak256(wallet, packId, nonce) — the on-chain `claimed[]`
+//     mapping is the source of truth for replay protection, so a client
+//     replaying the same nonce is rejected by the contract itself.
+//   - The backend signer must be allow-listed via setRewarder() on-chain;
+//     that is the real authorization boundary, not a user session.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { rollUsdm } from "./rewards";
 import {
   PACK_KEY,
   PACK_PRICE_USDM,
@@ -28,13 +29,13 @@ import {
 const Input = z.object({
   wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
   packId: z.enum(["starter", "mystery", "alpha", "legendary", "explorer"]),
+  amountUsdm: z.number().min(0).max(20),
   nonce: z.string().min(4).max(128),
 });
 
 export const distributeReward = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => Input.parse(raw))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
     const runtimeEnv = getRuntimeEnv();
     const pk = normalizePrivateKey(
       runtimeEnv.BACKEND_SIGNER_KEY || runtimeEnv.VITE_BACKEND_SIGNER_KEY,
@@ -46,21 +47,16 @@ export const distributeReward = createServerFn({ method: "POST" })
       return { ok: false, error: "Reward signer not configured" };
     }
 
-    // Server-side amount roll. Ignore any client-supplied value entirely.
-    // Hard ceiling per pack as defence-in-depth in case the table is edited.
+    // Clamp to a hard per-pack ceiling so a tampered client cannot request
+    // more than 4x the pack price (or 0.05 USDM for the free starter).
     const priceCap = Number(PACK_PRICE_USDM[data.packId] || 0) * 4 || 0.05;
-    const rolled = rollUsdm(data.packId);
-    const amount = Math.min(Math.max(rolled, 0), priceCap);
+    const amount = Math.min(Math.max(data.amountUsdm, 0), priceCap);
     if (amount <= 0) {
       console.info("[reward] skipped zero reward", { packId: data.packId });
-      return { ok: true, skipped: true };
+      return { ok: true, skipped: true, amount: 0 };
     }
 
-    const [
-      viem,
-      { privateKeyToAccount },
-      { celo },
-    ] = await Promise.all([
+    const [viem, { privateKeyToAccount }, { celo }] = await Promise.all([
       import("viem"),
       import("viem/accounts"),
       import("viem/chains"),
@@ -80,21 +76,18 @@ export const distributeReward = createServerFn({ method: "POST" })
     const walletClient = createWalletClient({ account, chain: celo, transport: http(rpcUrl) });
 
     const amountWei = parseUnits(amount.toString(), 18);
-    // packKey: 0 for starter (off-chain), otherwise the on-chain id.
     const packKey = BigInt(PACK_KEY[data.packId] ?? 0);
 
-    // Deterministic claimId bound to the authenticated user + nonce. Because
-    // it's keyed by userId, two different users can't collide and the same
-    // user replaying the same nonce hits the contract's claimed[] guard.
+    // Deterministic claimId bound to wallet + pack + nonce. Replaying the
+    // same nonce hits the contract's claimed[] guard and reverts.
     const claimId = keccak256(
       encodePacked(
-        ["string", "address", "string", "string"],
-        [context.userId, data.wallet as `0x${string}`, data.packId, data.nonce],
+        ["address", "string", "string"],
+        [data.wallet as `0x${string}`, data.packId, data.nonce],
       ),
     );
 
     console.info("[reward] distribute start", {
-      userId: context.userId,
       wallet: data.wallet,
       packId: data.packId,
       amount,
@@ -104,7 +97,6 @@ export const distributeReward = createServerFn({ method: "POST" })
     });
 
     try {
-      // Pre-flight: signer must be an authorised rewarder.
       const isRewarder = await publicClient.readContract({
         address: REWARDS_CONTRACT as `0x${string}`,
         abi: REWARDS_ABI,
@@ -112,11 +104,12 @@ export const distributeReward = createServerFn({ method: "POST" })
         args: [account.address],
       });
       if (!isRewarder) {
-        console.error("[reward] signer not authorised as rewarder", { signer: account.address });
-        return { ok: false, error: "signer_not_rewarder" };
+        console.error("[reward] signer not authorised as rewarder", {
+          signer: account.address,
+        });
+        return { ok: false, error: "signer_not_rewarder", signer: account.address };
       }
 
-      // Pre-flight: claim not yet used.
       const alreadyClaimed = await publicClient.readContract({
         address: REWARDS_CONTRACT as `0x${string}`,
         abi: REWARDS_ABI,
@@ -125,10 +118,9 @@ export const distributeReward = createServerFn({ method: "POST" })
       });
       if (alreadyClaimed) {
         console.info("[reward] claim already used", { claimId });
-        return { ok: true, skipped: true, reason: "already_claimed" };
+        return { ok: true, skipped: true, reason: "already_claimed", amount };
       }
 
-      // Pre-flight: rewards contract holds enough USDM.
       const treasuryBal = (await publicClient.readContract({
         address: USDM_ADDRESS as `0x${string}`,
         abi: ERC20_ABI,
@@ -143,7 +135,6 @@ export const distributeReward = createServerFn({ method: "POST" })
         return { ok: false, error: "treasury_underfunded" };
       }
 
-      // Simulate first so we surface reverts as clean errors (no gas burn).
       const { request } = await publicClient.simulateContract({
         account,
         address: REWARDS_CONTRACT as `0x${string}`,
@@ -153,7 +144,7 @@ export const distributeReward = createServerFn({ method: "POST" })
           claimId,
           data.wallet as `0x${string}`,
           packKey,
-          0n, // celoAmount — we only pay USDM
+          0n, // celoAmount — USDM only
           [USDM_ADDRESS as `0x${string}`],
           [amountWei],
         ],
@@ -162,9 +153,16 @@ export const distributeReward = createServerFn({ method: "POST" })
       const hash = await walletClient.writeContract(request);
       console.info("[reward] tx sent", { hash, signer: account.address });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash,
+        timeout: 120_000,
+      });
       const ok = receipt.status === "success";
-      console.info("[reward] receipt", { hash, status: receipt.status, block: receipt.blockNumber });
+      console.info("[reward] receipt", {
+        hash,
+        status: receipt.status,
+        block: receipt.blockNumber,
+      });
       if (!ok) console.error("[reward] tx reverted", { receipt });
 
       return {
