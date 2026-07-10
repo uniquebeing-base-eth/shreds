@@ -990,38 +990,45 @@ function HomeScreen() {
         void refreshStatsAndFeed();
       }).catch(() => { /* non-fatal */ });
 
-      // Automatically transfer USDM reward from the rewarder wallet.
-      // NOTE: the server rolls the amount itself and ignores anything the
-      // client sends beyond wallet/packId/nonce.
+        // Automatically transfer USDM reward from the rewarder wallet.
+      // We send the exact rolled amount so the on-chain payout matches
+      // what the UI displayed. The server clamps it to a per-pack ceiling.
       const usdmItem = items.find((i) => i.kind === "USDM");
-      if (usdmItem && wallet.address && (usdmItem.amountRaw ?? 0) > 0) {
-        const nonce = `${wallet.address.toLowerCase()}-${Date.now()}`;
+      const usdmAmount = typeof usdmItem?.amountRaw === "number" ? usdmItem.amountRaw : 0;
+      if (usdmItem && wallet.address && usdmAmount > 0) {
+        const nonce = `${wallet.address.toLowerCase()}-${pack.id}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
         console.info("[reward] distributeReward request", {
           wallet: wallet.address,
           packId: pack.id,
-          previewAmount: usdmItem.amountRaw,
+          amountUsdm: usdmAmount,
           nonce,
         });
-        void callDistribute({ data: {
-          wallet: wallet.address,
-          packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer",
-          nonce,
-        } }).then((result) => {
-          if (!result.ok) {
-            console.error("[reward] distributeReward failed", result);
-          } else {
-            console.info("[reward] distributeReward succeeded", result);
-          }
-        }).catch((error) => {
-          console.error("[reward] distributeReward request error", error);
-        });
+        void callDistribute({
+          data: {
+            wallet: wallet.address,
+            packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer",
+            amountUsdm: usdmAmount,
+            nonce,
+          },
+        })
+          .then((result) => {
+            if (!result.ok) {
+              console.error("[reward] distributeReward failed", result);
+            } else {
+              console.info("[reward] distributeReward succeeded", result);
+            }
+          })
+          .catch((error) => {
+            console.error("[reward] distributeReward request error", error);
+          });
       } else {
         console.info("[reward] distributeReward skipped", {
           wallet: wallet.address,
           packId: pack.id,
-          usdmAmount: usdmItem?.amountRaw,
+          usdmAmount,
         });
       }
+
 
     }, 1700);
   }, [phase, pack.id, pack.name, username, wallet.address, callAnnounce, callDistribute, callUpsertProfile, recordShred, refreshProfileAndLeaderboard]);
