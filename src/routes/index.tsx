@@ -1038,12 +1038,15 @@ function HomeScreen() {
       setBuyError("The free Starter Pack is on a 12-hour cooldown. Come back later for another free shred.");
       return;
     }
-    // If paid and not yet purchased, buy first
-    if (pack.priceNum > 0 && !purchased.has(pack.id)) {
-      if (!wallet.address) {
-        await wallet.connect();
+    if (!wallet.address) {
+      const acct = await wallet.connect();
+      if (!acct) {
+        setBuyError("Connect your wallet to receive USDM rewards.");
         return;
       }
+    }
+    // If paid and not yet purchased, buy first
+    if (pack.priceNum > 0 && !purchased.has(pack.id)) {
       if (wallet.chainId !== CELO_CHAIN_ID) {
         setBuyError("Switching to Celo network…");
         const acct = await wallet.connect();
@@ -1081,6 +1084,13 @@ function HomeScreen() {
       }
       setShowUsernameModal(true);
       return;
+    }
+    if (!wallet.address) {
+      const acct = await wallet.connect();
+      if (!acct) {
+        setBuyError("Connect your wallet to receive USDM rewards.");
+        return;
+      }
     }
     await startShredInner();
   }, [username, wallet, startShredInner]);

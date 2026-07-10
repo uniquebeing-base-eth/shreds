@@ -5,6 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { getRuntimeEnv, normalizePrivateKey } from "./reward-distribution";
 
 const RewardInput = z.object({
   wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
@@ -17,15 +18,13 @@ export const signReward = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => RewardInput.parse(raw))
   .handler(async ({ data, context }) => {
-    const pk = process.env.BACKEND_SIGNER_KEY;
+    const runtimeEnv = getRuntimeEnv();
+    const pk = normalizePrivateKey(runtimeEnv.BACKEND_SIGNER_KEY || runtimeEnv.VITE_BACKEND_SIGNER_KEY);
     if (!pk) throw new Error("BACKEND_SIGNER_KEY not configured");
-    // Normalize PK
-    let rawPk = (pk as string).replace(/^\"|\"$/g, "").replace(/^'|'$/g, "");
-    if (!rawPk.startsWith("0x") && /^[0-9a-fA-F]{64}$/.test(rawPk)) rawPk = `0x${rawPk}`;
-    if (!/^0x[0-9a-fA-F]{64}$/.test(rawPk)) throw new Error("BACKEND_SIGNER_KEY malformed");
+
     const { privateKeyToAccount } = await import("viem/accounts");
     const { parseUnits, encodePacked, keccak256 } = await import("viem");
-    const account = privateKeyToAccount(rawPk as `0x${string}`);
+    const account = privateKeyToAccount(pk as `0x${string}`);
     const amountWei = parseUnits(data.amountUsdm.toString(), 18);
     // Simple EIP-191 packed hash: (wallet, packId, amount, nonce, userId)
     const hash = keccak256(
