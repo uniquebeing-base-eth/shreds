@@ -28,6 +28,13 @@ export const distributeReward = createServerFn({ method: "POST" })
       console.error("[reward] distributeReward missing BACKEND_SIGNER_KEY");
       return { ok: false, error: "Reward signer not configured" };
     }
+    // Normalize: strip surrounding quotes if present and ensure hex format
+    let rawPk = (pk as string).replace(/^\"|\"$/g, "").replace(/^'|'$/g, "");
+    if (!rawPk.startsWith("0x") && /^[0-9a-fA-F]{64}$/.test(rawPk)) rawPk = `0x${rawPk}`;
+    if (!/^0x[0-9a-fA-F]{64}$/.test(rawPk)) {
+      console.error("[reward] distributeReward invalid BACKEND_SIGNER_KEY format", { rawPkSample: rawPk.slice(0, 12) + "..." });
+      return { ok: false, error: "invalid_signer_key" };
+    }
 
     // Server clamps amount to a safe ceiling for the pack tier
     const priceCap = Number(PACK_PRICE_USDM[data.packId] || 0) * 4 || 0.05;
@@ -44,9 +51,7 @@ export const distributeReward = createServerFn({ method: "POST" })
       import("viem/chains"),
     ]);
 
-    const account = privateKeyToAccount(
-      (pk.startsWith("0x") ? pk : `0x${pk}`) as `0x${string}`,
-    );
+    const account = privateKeyToAccount(rawPk as `0x${string}`);
     const publicClient = createPublicClient({ chain: celo, transport: http() });
     const walletClient = createWalletClient({ account, chain: celo, transport: http() });
 
@@ -96,15 +101,15 @@ export const distributeReward = createServerFn({ method: "POST" })
         });
         return { ok: false, error: "reward_pool_empty", signer: account.address };
       }
-
+      console.info("[reward] distributeReward transferData", { dataLength: transferData.length, transferData });
       const hash = await walletClient.sendTransaction({
         to: USDM_ADDRESS as `0x${string}`,
         data: transferData,
       });
       console.info("[reward] distributeReward txSent", { txHash: hash, signer: account.address });
 
-      // Fire-and-forget receipt wait — but await so we can report success/failure.
-      const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 30_000 });
+      // Wait for receipt; Celo can be slower so give a larger timeout.
+      const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
       console.info("[reward] distributeReward receipt", { hash, status: receipt.status, blockNumber: receipt.blockNumber });
       const ok = receipt.status === "success";
       if (!ok) {
@@ -123,8 +128,10 @@ export const distributeReward = createServerFn({ method: "POST" })
         wallet: data.wallet,
         packId: data.packId,
         amount,
-        signer: account.address,
+        signer: account?.address,
         error: errorMessage,
+        stack: (e as Error)?.stack,
+        errorObj: e,
       });
       return { ok: false, error: errorMessage.slice(0, 200) || "send_failed" };
     }

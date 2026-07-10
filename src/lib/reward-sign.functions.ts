@@ -19,11 +19,13 @@ export const signReward = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const pk = process.env.BACKEND_SIGNER_KEY;
     if (!pk) throw new Error("BACKEND_SIGNER_KEY not configured");
+    // Normalize PK
+    let rawPk = (pk as string).replace(/^\"|\"$/g, "").replace(/^'|'$/g, "");
+    if (!rawPk.startsWith("0x") && /^[0-9a-fA-F]{64}$/.test(rawPk)) rawPk = `0x${rawPk}`;
+    if (!/^0x[0-9a-fA-F]{64}$/.test(rawPk)) throw new Error("BACKEND_SIGNER_KEY malformed");
     const { privateKeyToAccount } = await import("viem/accounts");
     const { parseUnits, encodePacked, keccak256 } = await import("viem");
-    const account = privateKeyToAccount(
-      (pk.startsWith("0x") ? pk : `0x${pk}`) as `0x${string}`,
-    );
+    const account = privateKeyToAccount(rawPk as `0x${string}`);
     const amountWei = parseUnits(data.amountUsdm.toString(), 18);
     // Simple EIP-191 packed hash: (wallet, packId, amount, nonce, userId)
     const hash = keccak256(
@@ -33,6 +35,7 @@ export const signReward = createServerFn({ method: "POST" })
       ),
     );
     const signature = await account.signMessage({ message: { raw: hash } });
+    console.info("[reward] signReward generated", { signer: account.address, hash, signature });
 
     // Log the authorization for the leaderboard/history.
     try {
@@ -43,7 +46,9 @@ export const signReward = createServerFn({ method: "POST" })
         amount_usdm: data.amountUsdm,
         nonce: data.nonce,
       });
-    } catch { /* non-fatal */ }
+    } catch (e) {
+      console.warn("[reward] signReward: failed to insert reward_auth", { error: (e as Error)?.message ?? e, data: { userId: context.userId, wallet: data.wallet, packId: data.packId } });
+    }
 
     return {
       signer: account.address,
