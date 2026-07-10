@@ -991,19 +991,20 @@ function HomeScreen() {
       }).catch(() => { /* non-fatal */ });
 
       // Automatically transfer USDM reward from the rewarder wallet.
+      // NOTE: the server rolls the amount itself and ignores anything the
+      // client sends beyond wallet/packId/nonce.
       const usdmItem = items.find((i) => i.kind === "USDM");
       if (usdmItem && wallet.address && (usdmItem.amountRaw ?? 0) > 0) {
         const nonce = `${wallet.address.toLowerCase()}-${Date.now()}`;
         console.info("[reward] distributeReward request", {
           wallet: wallet.address,
           packId: pack.id,
-          amountUsdm: usdmItem.amountRaw,
+          previewAmount: usdmItem.amountRaw,
           nonce,
         });
         void callDistribute({ data: {
           wallet: wallet.address,
           packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer",
-          amountUsdm: usdmItem.amountRaw,
           nonce,
         } }).then((result) => {
           if (!result.ok) {
@@ -1021,6 +1022,7 @@ function HomeScreen() {
           usdmAmount: usdmItem?.amountRaw,
         });
       }
+
     }, 1700);
   }, [phase, pack.id, pack.name, username, wallet.address, callAnnounce, callDistribute, callUpsertProfile, recordShred, refreshProfileAndLeaderboard]);
 
