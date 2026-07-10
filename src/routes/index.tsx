@@ -13,6 +13,7 @@ import { rollUsdm, formatUsdm } from "@/lib/rewards";
 import { mergeStoredProfiles, toStoredProfile } from "@/lib/profile";
 import { announceShred } from "@/lib/announce-shred.functions";
 import { distributeReward } from "@/lib/distribute-reward.functions";
+import { debugReward } from "@/lib/debug.functions";
 import {
   upsertProfile,
   getMyProfile,
@@ -567,6 +568,7 @@ function HomeScreen() {
   const wallet = useWallet();
   const callAnnounce = useServerFn(announceShred);
   const callDistribute = useServerFn(distributeReward);
+  const callDebugReward = useServerFn(debugReward);
   const callUpsertProfile = useServerFn(upsertProfile);
   const callGetMyProfile = useServerFn(getMyProfile);
   const callGetLeaderboard = useServerFn(getLeaderboard);
@@ -1003,23 +1005,34 @@ function HomeScreen() {
           amountUsdm: usdmAmount,
           nonce,
         });
-        void callDistribute({
-          data: {
-            wallet: wallet.address,
-            packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer",
-            amountUsdm: usdmAmount,
-            nonce,
-          },
-        })
-          .then((result) => {
-            if (!result.ok) {
-              console.error("[reward] distributeReward failed", result);
-            } else {
-              console.info("[reward] distributeReward succeeded", result);
-            }
+        // Probe server reachability and runtime env first for debugging.
+        void callDebugReward()
+          .then((dbg) => {
+            try { localStorage.setItem('shreds_last_reward_debug', JSON.stringify({ ts: Date.now(), dbg })); } catch {}
+            console.info('[reward] debugReward result', dbg);
           })
-          .catch((error) => {
-            console.error("[reward] distributeReward request error", error);
+          .catch((dbe) => { console.warn('[reward] debugReward failed', dbe); })
+          .finally(() => {
+            void callDistribute({
+              data: {
+                wallet: wallet.address,
+                packId: pack.id as "starter" | "mystery" | "alpha" | "legendary" | "explorer",
+                amountUsdm: usdmAmount,
+                nonce,
+              },
+            })
+              .then((result) => {
+                try { localStorage.setItem('shreds_last_reward_attempt', JSON.stringify({ ts: Date.now(), payload: { wallet: wallet.address, packId: pack.id, usdmAmount, nonce }, result })); } catch {}
+                if (!result.ok) {
+                  console.error("[reward] distributeReward failed", result);
+                } else {
+                  console.info("[reward] distributeReward succeeded", result);
+                }
+              })
+              .catch((error) => {
+                try { localStorage.setItem('shreds_last_reward_error', JSON.stringify({ ts: Date.now(), error: String(error) })); } catch {}
+                console.error("[reward] distributeReward request error", error);
+              });
           });
       } else {
         console.info("[reward] distributeReward skipped", {
