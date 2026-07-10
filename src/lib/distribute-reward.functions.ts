@@ -12,6 +12,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { rollUsdm } from "./rewards";
 import { USDM_ADDRESS, PACK_PRICE_USDM } from "./contracts";
+import { normalizePrivateKey, resolveCeloRpcUrl } from "./reward-distribution";
 
 const Input = z.object({
   wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
@@ -23,17 +24,10 @@ const Input = z.object({
 export const distributeReward = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => Input.parse(raw))
   .handler(async ({ data }) => {
-    const pk = process.env.BACKEND_SIGNER_KEY;
+    const pk = normalizePrivateKey(process.env.BACKEND_SIGNER_KEY);
     if (!pk) {
       console.error("[reward] distributeReward missing BACKEND_SIGNER_KEY");
       return { ok: false, error: "Reward signer not configured" };
-    }
-    // Normalize: strip surrounding quotes if present and ensure hex format
-    let rawPk = (pk as string).replace(/^\"|\"$/g, "").replace(/^'|'$/g, "");
-    if (!rawPk.startsWith("0x") && /^[0-9a-fA-F]{64}$/.test(rawPk)) rawPk = `0x${rawPk}`;
-    if (!/^0x[0-9a-fA-F]{64}$/.test(rawPk)) {
-      console.error("[reward] distributeReward invalid BACKEND_SIGNER_KEY format", { rawPkSample: rawPk.slice(0, 12) + "..." });
-      return { ok: false, error: "invalid_signer_key" };
     }
 
     // Server clamps amount to a safe ceiling for the pack tier
@@ -51,9 +45,10 @@ export const distributeReward = createServerFn({ method: "POST" })
       import("viem/chains"),
     ]);
 
-    const account = privateKeyToAccount(rawPk as `0x${string}`);
-    const publicClient = createPublicClient({ chain: celo, transport: http() });
-    const walletClient = createWalletClient({ account, chain: celo, transport: http() });
+    const rpcUrl = resolveCeloRpcUrl(process.env);
+    const account = privateKeyToAccount(pk as `0x${string}`);
+    const publicClient = createPublicClient({ chain: celo, transport: http(rpcUrl) });
+    const walletClient = createWalletClient({ account, chain: celo, transport: http(rpcUrl) });
 
     const amountWei = parseUnits(amount.toString(), 18);
     const transferData = encodeFunctionData({
@@ -78,6 +73,7 @@ export const distributeReward = createServerFn({ method: "POST" })
       priceCap,
       amount,
       signer: account.address,
+      rpcUrl,
     });
 
     try {
