@@ -12,15 +12,37 @@ export const PAYMENT_CONTRACT = "0xf01d7d3a57af16c47bc330c48c5e201cebbf054e";
 export const REWARDS_CONTRACT = "0x16dd07bd11524de1d904cde7dfd326c7772c8608";
 export const USERNAME_CONTRACT = "0xb1ce5a24ab458a8fde04e0df9bfe86908515c90b";
 
+// RewardDistributor ABI — matches the deployed 6-arg distribute() signature.
+// distribute(bytes32 claimId, address player, uint256 packKey,
+//            uint256 celoAmount, address[] tokens, uint256[] amounts)
+// Also exposes claimed[bytes32] and rewarders[address] views for pre-flight.
 export const REWARDS_ABI = [
   {
     inputs: [
-      { internalType: "address", name: "to", type: "address" },
-      { internalType: "uint256", name: "amount", type: "uint256" },
+      { internalType: "bytes32", name: "claimId", type: "bytes32" },
+      { internalType: "address", name: "player", type: "address" },
+      { internalType: "uint256", name: "packKey", type: "uint256" },
+      { internalType: "uint256", name: "celoAmount", type: "uint256" },
+      { internalType: "address[]", name: "tokens", type: "address[]" },
+      { internalType: "uint256[]", name: "amounts", type: "uint256[]" },
     ],
     name: "distribute",
     outputs: [],
     stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "bytes32", name: "", type: "bytes32" }],
+    name: "claimed",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "", type: "address" }],
+    name: "rewarders",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    stateMutability: "view",
     type: "function",
   },
 ] as const;
