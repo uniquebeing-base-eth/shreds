@@ -1,50 +1,78 @@
-// Public server fn: sends USDM from the rewarder wallet directly to the
-// user after a shred. Uses BACKEND_SIGNER_KEY on Celo mainnet.
+// Server fn: sends USDM from the rewarder wallet to the player after a shred.
+// Uses BACKEND_SIGNER_KEY on Celo mainnet. The signer must be allow-listed on
+// the RewardDistributor contract (rewarders[signer] == true).
 //
-// Security notes:
-//   - The rewarder wallet is funded off-chain and only holds enough USDM
-//     to distribute rewards; a compromised secret cannot mint value.
-//   - Reward amounts are computed server-side from the pack tier so the
-//     client cannot claim a larger reward than the pack allows.
-//   - Basic dedupe: a nonce string tied to the client tx hash prevents a
-//     naive replay burst on the same wallet.
+// Security:
+//   - requireSupabaseAuth: only signed-in users can call.
+//   - Amount is rolled SERVER-SIDE from the pack tier; client amountUsdm is ignored.
+//   - Replay protection is enforced ON-CHAIN via claimId (deterministic per user+nonce).
+//   - Pre-flight checks: rewarder allow-list, USDM treasury balance, claimId not used.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { rollUsdm } from "./rewards";
-import { PACK_PRICE_USDM, REWARDS_ABI, REWARDS_CONTRACT } from "./contracts";
-import { getRuntimeEnv, normalizePrivateKey, resolveCeloRpcUrl } from "./reward-distribution";
+import {
+  PACK_KEY,
+  PACK_PRICE_USDM,
+  REWARDS_ABI,
+  REWARDS_CONTRACT,
+  USDM_ADDRESS,
+  ERC20_ABI,
+} from "./contracts";
+import {
+  getRuntimeEnv,
+  normalizePrivateKey,
+  resolveCeloRpcUrl,
+} from "./reward-distribution";
 
 const Input = z.object({
   wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
   packId: z.enum(["starter", "mystery", "alpha", "legendary", "explorer"]),
-  amountUsdm: z.number().min(0).max(20).optional(), // optional — server clamps
   nonce: z.string().min(4).max(128),
 });
 
 export const distributeReward = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((raw: unknown) => Input.parse(raw))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const runtimeEnv = getRuntimeEnv();
-    const pk = normalizePrivateKey(runtimeEnv.BACKEND_SIGNER_KEY || runtimeEnv.VITE_BACKEND_SIGNER_KEY);
+    const pk = normalizePrivateKey(
+      runtimeEnv.BACKEND_SIGNER_KEY || runtimeEnv.VITE_BACKEND_SIGNER_KEY,
+    );
     if (!pk) {
-      console.error("[reward] distributeReward missing BACKEND_SIGNER_KEY", { runtimeEnvKeys: Object.keys(runtimeEnv).sort() });
+      console.error("[reward] missing BACKEND_SIGNER_KEY", {
+        runtimeEnvKeys: Object.keys(runtimeEnv).sort(),
+      });
       return { ok: false, error: "Reward signer not configured" };
     }
 
-    // Server clamps amount to a safe ceiling for the pack tier
+    // Server-side amount roll. Ignore any client-supplied value entirely.
+    // Hard ceiling per pack as defence-in-depth in case the table is edited.
     const priceCap = Number(PACK_PRICE_USDM[data.packId] || 0) * 4 || 0.05;
-    const requested = data.amountUsdm ?? rollUsdm(data.packId);
-    const amount = Math.min(Math.max(requested, 0), priceCap);
+    const rolled = rollUsdm(data.packId);
+    const amount = Math.min(Math.max(rolled, 0), priceCap);
     if (amount <= 0) {
-      console.info("[reward] distributeReward skipped zero reward", { wallet: data.wallet, packId: data.packId, requested, priceCap });
+      console.info("[reward] skipped zero reward", { packId: data.packId });
       return { ok: true, skipped: true };
     }
 
-    const [{ createWalletClient, createPublicClient, http, parseUnits, encodeFunctionData }, { privateKeyToAccount }, { celo }] = await Promise.all([
+    const [
+      viem,
+      { privateKeyToAccount },
+      { celo },
+    ] = await Promise.all([
       import("viem"),
       import("viem/accounts"),
       import("viem/chains"),
     ]);
+    const {
+      createWalletClient,
+      createPublicClient,
+      http,
+      parseUnits,
+      keccak256,
+      encodePacked,
+    } = viem;
 
     const rpcUrl = resolveCeloRpcUrl(runtimeEnv);
     const account = privateKeyToAccount(pk as `0x${string}`);
@@ -52,51 +80,110 @@ export const distributeReward = createServerFn({ method: "POST" })
     const walletClient = createWalletClient({ account, chain: celo, transport: http(rpcUrl) });
 
     const amountWei = parseUnits(amount.toString(), 18);
+    // packKey: 0 for starter (off-chain), otherwise the on-chain id.
+    const packKey = BigInt(PACK_KEY[data.packId] ?? 0);
 
-    console.info("[reward] distributeReward start", {
+    // Deterministic claimId bound to the authenticated user + nonce. Because
+    // it's keyed by userId, two different users can't collide and the same
+    // user replaying the same nonce hits the contract's claimed[] guard.
+    const claimId = keccak256(
+      encodePacked(
+        ["string", "address", "string", "string"],
+        [context.userId, data.wallet as `0x${string}`, data.packId, data.nonce],
+      ),
+    );
+
+    console.info("[reward] distribute start", {
+      userId: context.userId,
       wallet: data.wallet,
       packId: data.packId,
-      requested,
-      priceCap,
       amount,
       signer: account.address,
       rpcUrl,
+      claimId,
     });
 
     try {
-      const hash = await walletClient.writeContract({
+      // Pre-flight: signer must be an authorised rewarder.
+      const isRewarder = await publicClient.readContract({
+        address: REWARDS_CONTRACT as `0x${string}`,
+        abi: REWARDS_ABI,
+        functionName: "rewarders",
+        args: [account.address],
+      });
+      if (!isRewarder) {
+        console.error("[reward] signer not authorised as rewarder", { signer: account.address });
+        return { ok: false, error: "signer_not_rewarder" };
+      }
+
+      // Pre-flight: claim not yet used.
+      const alreadyClaimed = await publicClient.readContract({
+        address: REWARDS_CONTRACT as `0x${string}`,
+        abi: REWARDS_ABI,
+        functionName: "claimed",
+        args: [claimId],
+      });
+      if (alreadyClaimed) {
+        console.info("[reward] claim already used", { claimId });
+        return { ok: true, skipped: true, reason: "already_claimed" };
+      }
+
+      // Pre-flight: rewards contract holds enough USDM.
+      const treasuryBal = (await publicClient.readContract({
+        address: USDM_ADDRESS as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: "balanceOf",
+        args: [REWARDS_CONTRACT as `0x${string}`],
+      })) as bigint;
+      if (treasuryBal < amountWei) {
+        console.error("[reward] treasury underfunded", {
+          have: treasuryBal.toString(),
+          need: amountWei.toString(),
+        });
+        return { ok: false, error: "treasury_underfunded" };
+      }
+
+      // Simulate first so we surface reverts as clean errors (no gas burn).
+      const { request } = await publicClient.simulateContract({
+        account,
         address: REWARDS_CONTRACT as `0x${string}`,
         abi: REWARDS_ABI,
         functionName: "distribute",
-        args: [data.wallet as `0x${string}`, amountWei],
+        args: [
+          claimId,
+          data.wallet as `0x${string}`,
+          packKey,
+          0n, // celoAmount — we only pay USDM
+          [USDM_ADDRESS as `0x${string}`],
+          [amountWei],
+        ],
       });
-      console.info("[reward] distributeReward txSent", { txHash: hash, signer: account.address, contract: REWARDS_CONTRACT });
 
-      // Wait for receipt; Celo can be slower so give a larger timeout.
+      const hash = await walletClient.writeContract(request);
+      console.info("[reward] tx sent", { hash, signer: account.address });
+
       const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
-      console.info("[reward] distributeReward receipt", { hash, status: receipt.status, blockNumber: receipt.blockNumber });
       const ok = receipt.status === "success";
-      if (!ok) {
-        console.error("[reward] distributeReward transaction failed", { receipt });
-      }
+      console.info("[reward] receipt", { hash, status: receipt.status, block: receipt.blockNumber });
+      if (!ok) console.error("[reward] tx reverted", { receipt });
+
       return {
         ok,
         txHash: hash,
         amount,
         signer: account.address,
-        receipt: ok ? undefined : receipt,
+        claimId,
       };
     } catch (e) {
-      const errorMessage = (e as Error)?.message ?? String(e);
-      console.error("[reward] distributeReward error", {
+      const msg = (e as Error)?.message ?? String(e);
+      console.error("[reward] distribute error", {
         wallet: data.wallet,
         packId: data.packId,
         amount,
         signer: account?.address,
-        error: errorMessage,
+        error: msg,
         stack: (e as Error)?.stack,
-        errorObj: e,
       });
-      return { ok: false, error: errorMessage.slice(0, 200) || "send_failed" };
+      return { ok: false, error: msg.slice(0, 300) || "send_failed" };
     }
   });
