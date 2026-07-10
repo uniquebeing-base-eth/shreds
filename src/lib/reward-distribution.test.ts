@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { REWARDS_ABI } from "./contracts";
 import { normalizePrivateKey, resolveCeloRpcUrl } from "./reward-distribution";
 
 describe("reward-distribution helpers", () => {
@@ -12,5 +13,9 @@ describe("reward-distribution helpers", () => {
     assert.equal(resolveCeloRpcUrl({ CELO_RPC_URL: "https://custom-rpc.example" }), "https://custom-rpc.example");
     assert.equal(resolveCeloRpcUrl({ CELO_RPC_URL: "   " }), "https://forno.celo.org");
     assert.equal(resolveCeloRpcUrl({}), "https://forno.celo.org");
+  });
+
+  it("exposes the reward contract distribute entrypoint", () => {
+    assert.ok(REWARDS_ABI.some((item) => item.type === "function" && item.name === "distribute"));
   });
 });

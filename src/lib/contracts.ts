@@ -12,6 +12,19 @@ export const PAYMENT_CONTRACT = "0xf01d7d3a57af16c47bc330c48c5e201cebbf054e";
 export const REWARDS_CONTRACT = "0x16dd07bd11524de1d904cde7dfd326c7772c8608";
 export const USERNAME_CONTRACT = "0xb1ce5a24ab458a8fde04e0df9bfe86908515c90b";
 
+export const REWARDS_ABI = [
+  {
+    inputs: [
+      { internalType: "address", name: "to", type: "address" },
+      { internalType: "uint256", name: "amount", type: "uint256" },
+    ],
+    name: "distribute",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
+
 // Pack IDs per user spec: 1=Mystery, 2=Alpha, 3=Legendary, 4=Explorer.
 // Starter is FREE and off-chain.
 export const PACK_KEY: Record<string, number | null> = {

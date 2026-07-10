@@ -11,8 +11,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { rollUsdm } from "./rewards";
-import { USDM_ADDRESS, PACK_PRICE_USDM } from "./contracts";
-import { normalizePrivateKey, resolveCeloRpcUrl } from "./reward-distribution";
+import { PACK_PRICE_USDM, REWARDS_ABI, REWARDS_CONTRACT } from "./contracts";
+import { getRuntimeEnv, normalizePrivateKey, resolveCeloRpcUrl } from "./reward-distribution";
 
 const Input = z.object({
   wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
@@ -24,9 +24,10 @@ const Input = z.object({
 export const distributeReward = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => Input.parse(raw))
   .handler(async ({ data }) => {
-    const pk = normalizePrivateKey(process.env.BACKEND_SIGNER_KEY);
+    const runtimeEnv = getRuntimeEnv();
+    const pk = normalizePrivateKey(runtimeEnv.BACKEND_SIGNER_KEY || runtimeEnv.VITE_BACKEND_SIGNER_KEY);
     if (!pk) {
-      console.error("[reward] distributeReward missing BACKEND_SIGNER_KEY");
+      console.error("[reward] distributeReward missing BACKEND_SIGNER_KEY", { runtimeEnvKeys: Object.keys(runtimeEnv).sort() });
       return { ok: false, error: "Reward signer not configured" };
     }
 
@@ -45,26 +46,12 @@ export const distributeReward = createServerFn({ method: "POST" })
       import("viem/chains"),
     ]);
 
-    const rpcUrl = resolveCeloRpcUrl(process.env);
+    const rpcUrl = resolveCeloRpcUrl(runtimeEnv);
     const account = privateKeyToAccount(pk as `0x${string}`);
     const publicClient = createPublicClient({ chain: celo, transport: http(rpcUrl) });
     const walletClient = createWalletClient({ account, chain: celo, transport: http(rpcUrl) });
 
     const amountWei = parseUnits(amount.toString(), 18);
-    const transferData = encodeFunctionData({
-      abi: [{
-        inputs: [
-          { name: "to", type: "address" },
-          { name: "amount", type: "uint256" },
-        ],
-        name: "transfer",
-        outputs: [{ type: "bool" }],
-        stateMutability: "nonpayable",
-        type: "function",
-      }],
-      functionName: "transfer",
-      args: [data.wallet as `0x${string}`, amountWei],
-    });
 
     console.info("[reward] distributeReward start", {
       wallet: data.wallet,
@@ -77,32 +64,13 @@ export const distributeReward = createServerFn({ method: "POST" })
     });
 
     try {
-      // Check rewarder balance first — surface a clean message if empty.
-      const bal = (await publicClient.readContract({
-        address: USDM_ADDRESS as `0x${string}`,
-        abi: [{ inputs: [{ name: "a", type: "address" }], name: "balanceOf", outputs: [{ type: "uint256" }], stateMutability: "view", type: "function" }],
-        functionName: "balanceOf",
-        args: [account.address],
-      })) as bigint;
-      console.info("[reward] distributeReward balance", {
-        signer: account.address,
-        balance: bal.toString(),
-        amountWei: amountWei.toString(),
+      const hash = await walletClient.writeContract({
+        address: REWARDS_CONTRACT as `0x${string}`,
+        abi: REWARDS_ABI,
+        functionName: "distribute",
+        args: [data.wallet as `0x${string}`, amountWei],
       });
-      if (bal < amountWei) {
-        console.error("[reward] distributeReward insufficient balance", {
-          signer: account.address,
-          balance: bal.toString(),
-          amountWei: amountWei.toString(),
-        });
-        return { ok: false, error: "reward_pool_empty", signer: account.address };
-      }
-      console.info("[reward] distributeReward transferData", { dataLength: transferData.length, transferData });
-      const hash = await walletClient.sendTransaction({
-        to: USDM_ADDRESS as `0x${string}`,
-        data: transferData,
-      });
-      console.info("[reward] distributeReward txSent", { txHash: hash, signer: account.address });
+      console.info("[reward] distributeReward txSent", { txHash: hash, signer: account.address, contract: REWARDS_CONTRACT });
 
       // Wait for receipt; Celo can be slower so give a larger timeout.
       const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 });
